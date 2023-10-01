@@ -1,0 +1,19 @@
+version: '3'
+
+services:
+  surrealdb:
+    entrypoint: 
+      - /surreal 
+      - start 
+      - -u
+      - admin
+      - -p
+      - admin
+      - -l
+      - debug
+      - file://db
+    image: surrealdb/surrealdb:latest
+    ports:
+      - 8000:8000
+    volumes:
+      - ./db:/db

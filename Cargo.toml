@@ -1,0 +1,30 @@
+[package]
+name = "rossbot"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bytes = "1.5.0"
+dotenv = "0.15.0"
+image = "0.24.7"
+mime = "0.3.17"
+reqwest = "0.11.20"
+serenity = { version = "0.11.6", default-features = false, features = [
+    "client",
+    "gateway",
+    "rustls_backend",
+    "model",
+    "cache",
+] }
+tokio = { version = "1.32.0", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+lazy_static = "1.4.0"
+tokio-util = "0.7.9"
+surrealdb = { version = "1.0.0", features = ["kv-rocksdb", "kv-mem"] }
+serde = { version = "1.0.188", features = ["derive"] }
+chrono = { version = "0.4.31", features = ["serde"] }
+async-trait = "0.1.73"
+config = { version = "0.13.3", default-features = false, features = ["json"]}
