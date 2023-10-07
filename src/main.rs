@@ -3,6 +3,7 @@ pub mod database;
 pub mod handlers;
 pub mod image_processing;
 pub mod log;
+pub mod storage;
 pub mod util;
 
 use config::CONFIG;

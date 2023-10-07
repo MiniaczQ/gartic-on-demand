@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use serde::{de::DeserializeOwned, Deserialize};
 use serenity::model::prelude::{ChannelId, GuildId, RoleId};
 
-use crate::{database::DatabaseConfig, log::LogConfig};
+use crate::{database::DatabaseConfig, log::LogConfig, storage::StorageConfig};
 
 lazy_static! {
     pub static ref CONFIG: AppConfig = init();
@@ -31,6 +31,7 @@ pub struct AppConfig {
     pub image: Image,
     pub log: LogConfig,
     pub database: DatabaseConfig,
+    pub storage: StorageConfig,
 }
 
 #[derive(Debug, Deserialize)]

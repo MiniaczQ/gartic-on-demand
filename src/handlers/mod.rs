@@ -3,7 +3,7 @@ use serenity::{
     prelude::{Context, EventHandler},
 };
 
-use crate::{config::CONFIG, database::Database};
+use crate::{config::CONFIG, database::Database, storage::Storage};
 
 use self::assets::AssetsHandler;
 
@@ -11,12 +11,14 @@ pub mod assets;
 
 pub struct AppContext {
     pub db: Database,
+    pub sg: Storage,
 }
 
 impl AppContext {
     pub async fn setup() -> Self {
         let db = CONFIG.database.connect().await;
-        Self { db }
+        let sg = Storage::setup(&CONFIG.storage).await;
+        Self { db, sg }
     }
 }
 
