@@ -1,5 +1,12 @@
 # Flow
 
+1. Start from round (0-3 draw attr, 4 character)
+2. If round 1-4, find and lock existing, if 0 don't do anything
+3. 
+
+
+Timeouts 15 min, 2 h
+
 1. Send primary attribute to bot
 2. Bot responds with 1 attribute
 3. Draw another, get response, until you get 4 attributes

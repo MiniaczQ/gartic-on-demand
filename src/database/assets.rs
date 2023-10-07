@@ -68,7 +68,7 @@ impl<'a> AssetEntry<'a> {
 pub trait AssetRepository {
     async fn create_asset<'a>(&self, id: u64, entry: AssetEntry<'a>) -> bool;
     async fn delete_asset(&self, id: u64) -> bool;
-    async fn random_asset(&self, kind: AssetKind) -> Option<AssetEntryQuery>;
+    async fn random_assets(&self, kind: AssetKind, n: u32) -> Option<AssetEntryQuery>;
 }
 
 #[async_trait]
@@ -92,18 +92,14 @@ impl<T: Connection> AssetRepository for Surreal<T> {
             .is_some()
     }
 
-    async fn random_asset(&self, kind: AssetKind) -> Option<AssetEntryQuery> {
-        let query = r#"
-            LET $ims = (SELECT * FROM $table WHERE kind = $kind);
-            LET $count = array::len($ims);
-            LET $idx = rand::int(0, $count - 1);
-            LET $img = array::at($ims, $idx);
-            SELECT * from $img
-        "#;
+    async fn random_assets(&self, kind: AssetKind, n: u32) -> Option<AssetEntryQuery> {
+        let query =
+            r#"SELECT * FROM type::table($table) WHERE kind = $kind ORDER BY rand() LIMIT $limit"#;
         let mut result = self
             .query(query)
             .bind(("table", TABLE))
             .bind(("kind", kind))
+            .bind(("limit", n))
             .await
             .map_err(|e| error!(error = ?e))
             .ok()?;

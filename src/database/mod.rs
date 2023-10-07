@@ -1,4 +1,6 @@
 pub mod assets;
+pub mod attributes;
+pub mod migrations;
 
 use serde::Deserialize;
 use surrealdb::{
@@ -7,11 +9,14 @@ use surrealdb::{
     Surreal,
 };
 
+use self::migrations::MigratorConfig;
+
 #[derive(Debug, Deserialize)]
 pub struct DatabaseConfig {
     pub address: String,
     pub namespace: String,
     pub database: String,
+    pub migrator: MigratorConfig,
 }
 
 impl DatabaseConfig {
