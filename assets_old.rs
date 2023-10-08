@@ -1,6 +1,6 @@
-use crate::{
-    config::CONFIG,
-    database::assets::{AssetEntry, AssetKind, AssetRepository},
+use crate::config::CONFIG;
+use rossbot::{
+    database::assets::{AssetEntry, AssetKind},
     image_processing::{normalize_image, RgbaConvert},
     util::{fetch_image, get_image_attachment_link},
 };
@@ -46,9 +46,10 @@ impl AssetsHandler {
         let Some(image) = fetch_image(url).await else {
             return;
         };
-        let image = normalize_image(&image);
+        let image = normalize_image(&image, CONFIG.image.width, CONFIG.image.height);
         let bytes = image.to_png();
         // Save normalized image
+        acx.sg.upload(format!("{}.png", msg.id), &bytes).await;
         let file = AttachmentType::Bytes {
             data: std::borrow::Cow::Owned(bytes.to_vec()),
             filename: "asset.png".to_owned(),

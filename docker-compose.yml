@@ -28,6 +28,11 @@ services:
     restart: always
     volumes:
       - ./data/minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 3s
+      timeout: 3s
+      retries: 3
 
   createbuckets:
     image: minio/mc:latest
@@ -36,8 +41,9 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
       MINIO_BUCKET_NAME: images
     depends_on:
-      - s3storage
-    entrypoint: ./scripts/bucket_setup.sh
+      s3storage:
+        condition: service_healthy
+    entrypoint: /scripts/bucket_setup.sh
     volumes:
       - type: bind
         source: ./scripts

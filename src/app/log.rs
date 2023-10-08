@@ -3,7 +3,7 @@ use tracing_subscriber::{
     fmt, prelude::__tracing_subscriber_SubscriberExt, registry, util::SubscriberInitExt, EnvFilter,
 };
 
-use crate::config::CONFIG;
+use crate::app::config::CONFIG;
 
 pub fn setup() {
     registry()

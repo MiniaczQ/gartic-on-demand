@@ -7,8 +7,6 @@ use image::{
 };
 use std::{cmp::max, io::Cursor};
 
-use crate::config::CONFIG;
-
 const WHITE: Rgba<u8> = Rgba([255u8, 255u8, 255u8, 255u8]);
 
 pub trait RgbaConvert {
@@ -120,7 +118,7 @@ impl RgbaProcess for RgbaImage {
     }
 
     fn pad_to_size(&self, new_width: u32, new_height: u32) -> Self {
-        let mut new_image = RgbaImage::from_pixel(CONFIG.image.width, CONFIG.image.height, WHITE);
+        let mut new_image = RgbaImage::from_pixel(new_width, new_height, WHITE);
         let (width, height) = self.dimensions();
         let x = (new_width - width) / 2;
         let y = (new_height - height) / 2;
@@ -143,24 +141,26 @@ pub fn concat_2_2(images: &[RgbaImage]) -> RgbaImage {
     concated
 }
 
-pub fn normalize_image(image: &RgbaImage) -> RgbaImage {
-    let (width, height) = (CONFIG.image.width, CONFIG.image.height);
+pub fn normalize_image(image: &RgbaImage, width: u32, height: u32) -> RgbaImage {
     image
         .remove_alpha()
         .scale_to_fit(width, height)
         .pad_to_size(width, height)
 }
 
-pub fn normalize_image_aoi(image: &RgbaImage) -> RgbaImage {
-    normalize_image(&image.focus_aoi(5))
+pub fn normalize_image_aoi(image: &RgbaImage, width: u32, height: u32) -> RgbaImage {
+    normalize_image(&image.focus_aoi(5), width, height)
 }
 
-pub fn normalize_images_aoi(images: &[&RgbaImage]) -> Vec<RgbaImage> {
-    images.iter().map(|i| normalize_image_aoi(i)).collect()
+pub fn normalize_images_aoi(images: &[&RgbaImage], width: u32, height: u32) -> Vec<RgbaImage> {
+    images
+        .iter()
+        .map(|i| normalize_image_aoi(i, width, height))
+        .collect()
 }
 
-pub fn combined(images: &[&RgbaImage]) -> Bytes {
-    let images = normalize_images_aoi(images);
+pub fn combined(images: &[&RgbaImage], width: u32, height: u32) -> Bytes {
+    let images = normalize_images_aoi(images, width, height);
     let image = concat_2_2(&images);
     image.to_png()
 }

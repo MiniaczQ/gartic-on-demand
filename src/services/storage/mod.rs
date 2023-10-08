@@ -3,6 +3,7 @@ use aws_sdk_s3::Client;
 use aws_types::{app_name::AppName, region::Region, SdkConfig};
 use bytes::Bytes;
 use serde::Deserialize;
+use serenity::prelude::TypeMapKey;
 use tracing::error;
 
 #[derive(Debug, Deserialize)]
@@ -23,7 +24,7 @@ impl From<&StorageConfig> for SdkConfig {
             None,
             "Config",
         ));
-        let region = Region::new("127.0.0.1");
+        let region = Region::new("eu-east-1");
         Self::builder()
             .app_name(name)
             .endpoint_url(&value.address)
@@ -47,16 +48,17 @@ impl Storage {
         this
     }
 
-    pub async fn upload(&self, key: impl Into<String>, obj: Bytes) -> bool {
+    pub async fn upload(&self, key: impl Into<String>, obj: &Bytes) -> Option<()> {
         self.client
             .put_object()
             .bucket(&self.bucket)
             .key(key)
-            .body(obj.into())
+            .body(obj.clone().into())
             .send()
             .await
             .map_err(|e| error!(error = ?e))
             .is_ok()
+            .then_some(())
     }
 
     pub async fn download(&self, key: impl Into<String>) -> Option<Bytes> {
@@ -78,4 +80,8 @@ impl Storage {
             .into_bytes();
         Some(obj)
     }
+}
+
+impl TypeMapKey for Storage {
+    type Value = Storage;
 }

@@ -1,10 +1,10 @@
+use crate::app::log::LogConfig;
 use config::{Config, Environment, File, FileFormat};
 use dotenv::dotenv;
 use lazy_static::lazy_static;
+use rossbot::services::{database::DatabaseConfig, storage::StorageConfig};
 use serde::{de::DeserializeOwned, Deserialize};
 use serenity::model::prelude::{ChannelId, GuildId, RoleId};
-
-use crate::{database::DatabaseConfig, log::LogConfig, storage::StorageConfig};
 
 lazy_static! {
     pub static ref CONFIG: AppConfig = init();
