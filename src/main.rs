@@ -3,8 +3,9 @@ pub mod app;
 use app::{
     commands,
     config::CONFIG,
+    error::AppError,
     handlers::{remove_asset::RemoveAsset, AssetHandler},
-    AppData, AppError,
+    AppData,
 };
 use poise::{serenity_prelude::Ready, Event, Framework, FrameworkContext};
 use serenity::prelude::{Context, GatewayIntents};
@@ -75,7 +76,7 @@ fn options() -> poise::FrameworkOptions<AppData, AppError> {
             commands::add_asset::add_asset(),
             commands::start::start(),
             commands::submit::submit(),
-            commands::abort::abort(),
+            commands::cancel::cancel(),
         ],
         on_error: |error| Box::pin(on_error(error)),
         event_handler: event_handler,

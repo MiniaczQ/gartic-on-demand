@@ -1,54 +1,57 @@
 pub mod ross;
 
-use std::time::Duration;
-
-use async_trait::async_trait;
+use self::ross::Ross;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GameSession {
+    pub mode: Game,
     pub images: Vec<u64>,
-    pub mode: Gamemode,
-    pub active: bool,
 }
 
 impl GameSession {
-    pub fn new(mode: Gamemode) -> Self {
+    pub fn new(mode: Game) -> Self {
         Self {
             images: vec![],
             mode,
-            active: true,
         }
+    }
+
+    pub fn round(&self) -> u64 {
+        self.images.len() as u64
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub enum Gamemode {
+pub enum Game {
     Ross,
 }
 
-impl Gamemode {
-    pub fn round_time(&self, round: u64) -> Duration {
+impl GameLogic for Game {
+    fn last_round(&self) -> u64 {
         match self {
-            Gamemode::Ross => {
-                if round < 4 {
-                    Duration::from_secs(900)
-                } else {
-                    Duration::from_secs(5200)
-                }
-            }
+            Game::Ross => Ross.last_round(),
+        }
+    }
+
+    fn time_limit(&self, round: u64) -> Duration {
+        match self {
+            Game::Ross => Ross.time_limit(round),
+        }
+    }
+
+    fn prompt(&self, round: u64) -> &'static str {
+        match self {
+            Game::Ross => Ross.prompt(round),
         }
     }
 }
 
-pub trait GamemodeLogic {
-    fn is_last_round(&self, round: u32) -> bool;
-    fn get_round_info(&self, round: u32) -> RoundInfo;
-}
-
-pub struct RoundInfo {
-    pub time_limit: Duration,
-    pub prompt: String,
+pub trait GameLogic {
+    fn last_round(&self) -> u64;
+    fn time_limit(&self, round: u64) -> Duration;
+    fn prompt(&self, round: u64) -> &'static str;
 }
 
 #[derive(Debug, thiserror::Error)]

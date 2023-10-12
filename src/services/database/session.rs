@@ -1,6 +1,6 @@
 use super::{Database, DbError, DbResult, RawRecord};
 use crate::services::{
-    gamemodes::{GameSession, Gamemode},
+    gamemodes::{Game, GameLogic, GameSession},
     provider::Provider,
 };
 use chrono::{DateTime, Utc};
@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct UserSession {
-    pub user: UserId,
+    pub user_id: UserId,
     pub expires_at: DateTime<Utc>,
 }
 
@@ -26,6 +26,30 @@ impl Session {
             game,
         }
     }
+
+    pub fn prompt_started(&self) -> String {
+        let mode = self.game.mode;
+        let round = self.game.round();
+        format!(
+            "Started {:?} mode round {}.\n{}\nExpiring <t:{}:R>.\nUse `/submit` or `/cancel` to continue.",
+            mode,
+            round + 1,
+            mode.prompt(round),
+            self.user.unwrap().expires_at.timestamp()
+        )
+    }
+
+    pub fn prompt_already_running(&self) -> String {
+        let mode = self.game.mode;
+        let round = self.game.round();
+        format!(
+            "{:?} mode round {} already running.\n{}\nExpiring <t:{}:R>.\nnUse `/submit` or `/cancel` to continue.",
+            mode,
+            round + 1,
+            mode.prompt(round),
+            self.user.unwrap().expires_at.timestamp()
+        )
+    }
 }
 
 pub struct SessionRepository {
@@ -35,15 +59,15 @@ pub struct SessionRepository {
 impl SessionRepository {
     const TABLE: &str = "sessions";
 
-    pub async fn get_current_user_game(&self, user: UserId) -> DbResult<Session> {
+    pub async fn get_current_user_game(&self, user_id: UserId) -> DbResult<Session> {
         let query = r#"
-        SELECT * FROM type::table($table) WHERE user.user = $user
+        SELECT * FROM type::table($table) WHERE user.user_id = $user_id
         "#;
         let mut result = self
             .db
             .query(query)
             .bind(("table", Self::TABLE))
-            .bind(("user", Some(user)))
+            .bind(("user_id", user_id))
             .await?;
         let session: Option<RawRecord<Session>> = result.take(0)?;
         let session = session.ok_or(DbError::NotFound)?;
@@ -52,15 +76,14 @@ impl SessionRepository {
 
     pub async fn find_game_for_user(
         &self,
-        mode: Gamemode,
+        mode: Game,
         round: u64,
         user: UserSession,
     ) -> DbResult<Session> {
         let query = r#"
         UPDATE (
             SELECT * FROM type::table($table)
-                WHERE game.active = true
-                AND user = NONE
+                WHERE user = NONE
                 AND array::len(game.images) = $round
                 AND game.mode = $mode
             ORDER BY rand() LIMIT 1
@@ -74,7 +97,7 @@ impl SessionRepository {
             .bind(("table", Self::TABLE))
             .bind(("round", round))
             .bind(("mode", mode))
-            .bind(("user", Some(user)))
+            .bind(("user", user))
             .await?;
         let session: Option<RawRecord<Session>> = result.take(0)?;
         let session = session.ok_or(DbError::NotFound)?;
@@ -99,40 +122,43 @@ impl SessionRepository {
         Ok(())
     }
 
-    pub async fn remove_expiry(&self, user: UserId) -> DbResult<()> {
+    pub async fn remove_expiry(&self, user_id: UserId) -> DbResult<()> {
         let query = r#"
         UPDATE type::table($table) SET
             user.expires_at = NONE
-        WHERE user.user = $user
+        WHERE user.user_id = $user_id
         "#;
         self.db
             .query(query)
             .bind(("table", Self::TABLE))
-            .bind(("user", user))
+            .bind(("user_id", user_id))
             .await?;
         Ok(())
     }
 
-    pub async fn attach_image(&self, user: UserId, image: u64) -> DbResult<()> {
+    pub async fn attach_image(&self, user_id: UserId, image: u64) -> DbResult<()> {
         let query =
-            r#"UPDATE type::table($table) SET game.images += $image WHERE user.user = $user"#;
+            r#"UPDATE type::table($table) SET game.images += $image WHERE user.user_id = $user_id"#;
         self.db
             .query(query)
             .bind(("table", Self::TABLE))
-            .bind(("user", user))
+            .bind(("user_id", user_id))
             .bind(("image", image))
             .await?;
         Ok(())
     }
 
-    pub async fn detach_user(&self, user: UserId) -> DbResult<()> {
-        let query = r#"UPDATE type::table($table) SET user = NONE WHERE user.user = $user"#;
-        self.db
+    pub async fn detach_user(&self, user_id: UserId) -> DbResult<GameSession> {
+        let query = r#"UPDATE type::table($table) SET user = NONE WHERE user.user_id = $user_id"#;
+        let mut result = self
+            .db
             .query(query)
             .bind(("table", Self::TABLE))
-            .bind(("user", user))
+            .bind(("user_id", user_id))
             .await?;
-        Ok(())
+        let session: Option<RawRecord<Session>> = result.take(0)?;
+        let session = session.ok_or(DbError::NotFound)?;
+        Ok(session.entry.game)
     }
 }
 

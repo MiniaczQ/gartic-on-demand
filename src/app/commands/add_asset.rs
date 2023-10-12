@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use crate::{
-    app::{config::CONFIG, AppError, InternalError, UserError},
+    app::{config::CONFIG, error::ConvertError, util::fetch_image_from_attachment, AppError},
     AppData,
 };
 use poise::{
@@ -12,9 +12,7 @@ use rossbot::services::{
     database::images::{AssetKind, Image, ImageRepository},
     image_processing::{normalize_image, RgbaConvert},
     provider::Provider,
-    util::fetch_image_from_attachment,
 };
-use tracing::error;
 
 #[derive(Debug, poise::ChoiceParameter)]
 pub enum AssetKindArg {
@@ -38,7 +36,7 @@ fn kind_to_channel(kind: AssetKind) -> ChannelId {
     }
 }
 
-#[poise::command(slash_command, guild_cooldown = 60, guild_only)]
+#[poise::command(slash_command, guild_only)]
 pub async fn add_asset(
     ctx: Context<'_, AppData, AppError>,
     attachment: Attachment,
@@ -48,7 +46,7 @@ pub async fn add_asset(
 
     let image = fetch_image_from_attachment(attachment)
         .await
-        .ok_or(UserError("Attachment is not an image"))?;
+        .map_user("Attachment is not an image")?;
     let image = normalize_image(&image, CONFIG.image.width, CONFIG.image.height);
     let image = AttachmentType::Bytes {
         data: Cow::Owned(image.to_png().to_vec()),
@@ -68,10 +66,7 @@ pub async fn add_asset(
     let ir: ImageRepository = ctx.data().get();
     ir.create(message.id.0, Image::new(kind.into(), author.id))
         .await
-        .map_err(|e| {
-            error!(error = ?e);
-            InternalError("Failed to add image to database")
-        })?;
+        .map_internal("Failed to add image to database")?;
 
     ctx.send(|f| f.content("Added")).await?;
 

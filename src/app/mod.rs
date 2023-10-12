@@ -1,17 +1,21 @@
 use std::error::Error;
 
+use poise::Context;
 use rossbot::services::{
     database::{migrations::Migrator, Database},
     provider::Provider,
     storage::Storage,
 };
 
-use self::config::CONFIG;
+use self::{config::CONFIG, error::AppError};
 
-pub mod config;
-pub mod log;
 pub mod commands;
+pub mod config;
+pub mod error;
 pub mod handlers;
+pub mod log;
+pub mod response;
+pub mod util;
 
 pub struct AppData {
     pub db: Database,
@@ -29,18 +33,6 @@ impl AppData {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum AppError {
-    #[error("{0}")]
-    Serenity(#[from] serenity::Error),
-    #[error("{0}")]
-    UserError(&'static str),
-    #[error("{0}")]
-    InternalError(&'static str),
-}
-
-pub use AppError::{InternalError, UserError};
-
 impl Provider<Database> for AppData {
     fn get(&self) -> Database {
         self.db.clone()
@@ -52,3 +44,5 @@ impl Provider<Storage> for AppData {
         self.sg.clone()
     }
 }
+
+pub type AppContext<'a> = Context<'a, AppData, AppError>;
