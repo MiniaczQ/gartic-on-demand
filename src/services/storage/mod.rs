@@ -3,7 +3,6 @@ use aws_sdk_s3::Client;
 use aws_types::{app_name::AppName, region::Region, SdkConfig};
 use bytes::Bytes;
 use serde::Deserialize;
-use serenity::prelude::TypeMapKey;
 use tracing::error;
 
 #[derive(Debug, Deserialize)]
@@ -34,34 +33,39 @@ impl From<&StorageConfig> for SdkConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct Storage {
     client: Client,
     bucket: String,
 }
 
 impl Storage {
-    pub async fn setup(config: &StorageConfig) -> Self {
+    pub async fn setup(config: &StorageConfig) -> SgResult<Self> {
         let client = Client::new(&config.into());
         let bucket = config.bucket.clone();
         let this = Self { client, bucket };
-        this.client.list_buckets().send().await.unwrap();
-        this
+        this.client
+            .list_buckets()
+            .send()
+            .await
+            .map_err(aws_sdk_s3::Error::from)?;
+        Ok(this)
     }
 
-    pub async fn upload(&self, key: impl Into<String>, obj: &Bytes) -> Option<()> {
-        self.client
+    pub async fn upload(&self, key: impl Into<String>, obj: &Bytes) -> SgResult<()> {
+        let _ = self
+            .client
             .put_object()
             .bucket(&self.bucket)
             .key(key)
             .body(obj.clone().into())
             .send()
             .await
-            .map_err(|e| error!(error = ?e))
-            .is_ok()
-            .then_some(())
+            .map_err(aws_sdk_s3::Error::from)?;
+        Ok(())
     }
 
-    pub async fn download(&self, key: impl Into<String>) -> Option<Bytes> {
+    pub async fn download(&self, key: impl Into<String>) -> SgResult<Bytes> {
         let obj = self
             .client
             .get_object()
@@ -69,19 +73,30 @@ impl Storage {
             .key(key)
             .send()
             .await
-            .map_err(|e| error!(error = ?e))
-            .ok()?;
-        let obj = obj
-            .body
-            .collect()
-            .await
-            .map_err(|e| error!(error = ?e))
-            .ok()?
-            .into_bytes();
-        Some(obj)
+            .map_err(aws_sdk_s3::Error::from)?;
+        let obj = obj.body.collect().await?.into_bytes();
+        Ok(obj)
+    }
+
+    pub async fn download_many(
+        &self,
+        keys: impl Iterator<Item = impl Into<String>>,
+    ) -> SgResult<Vec<Bytes>> {
+        let mut objs = Vec::with_capacity(keys.size_hint().0);
+        for key in keys {
+            let obj = self.download(key).await?;
+            objs.push(obj);
+        }
+        Ok(objs)
     }
 }
 
-impl TypeMapKey for Storage {
-    type Value = Storage;
+#[derive(Debug, thiserror::Error)]
+pub enum SgError {
+    #[error("{0}")]
+    S3(#[from] aws_sdk_s3::Error),
+    #[error("{0}")]
+    ByteStream(#[from] aws_smithy_http::byte_stream::error::Error),
 }
+
+pub type SgResult<T> = Result<T, SgError>;

@@ -83,7 +83,7 @@ impl<'a> Migrator<'a> {
         BytesMut::from(result.as_slice()).freeze()
     }
 
-    fn get_all_migrations(&self) -> Result<Vec<Migration>> {
+    fn get_all_migrations(&self) -> MigrationResult<Vec<Migration>> {
         let dir_reader = read_dir(&self.config.migrations_dir)?;
         let migration_files: Vec<DirEntry> = dir_reader.collect::<std::io::Result<_>>()?;
         let mut migration_files: Vec<Migration> = migration_files
@@ -94,7 +94,7 @@ impl<'a> Migrator<'a> {
                 let hash = Self::sha256(query.as_bytes());
                 Ok(Migration { id, query, hash })
             })
-            .collect::<Result<_>>()?;
+            .collect::<MigrationResult<_>>()?;
         migration_files.sort_by(|a, b| a.id.cmp(&b.id));
         Ok(migration_files)
     }
@@ -102,7 +102,7 @@ impl<'a> Migrator<'a> {
     fn migrations_to_apply<'b>(
         applied_migrations: &[AppliedMigration],
         all_migrations: &'b [Migration],
-    ) -> Result<&'b [Migration]> {
+    ) -> MigrationResult<&'b [Migration]> {
         let applied_count = applied_migrations.len();
         if applied_count > all_migrations.len() {
             Err(Error::Mismatch)?
@@ -130,7 +130,7 @@ impl<'a> Migrator<'a> {
         &self,
         db: &Surreal<T>,
         migration: &Migration,
-    ) -> Result<()> {
+    ) -> MigrationResult<()> {
         const PRE: &str = "BEGIN TRANSACTION;";
         const POST: &str = r#"
             INSERT INTO migrations (id, applied_at, hash) VALUES (type::thing(migrations, $id), time::now(), $hash);
@@ -150,7 +150,7 @@ impl<'a> Migrator<'a> {
         Ok(())
     }
 
-    pub async fn migrate<T: Connection>(&self, db: &Surreal<T>) -> Result<()> {
+    pub async fn migrate<T: Connection>(&self, db: &Surreal<T>) -> MigrationResult<()> {
         let applied_migrations = self.get_applied_migrations(db).await?;
         let migration_files = self.get_all_migrations()?;
         let migration_files = Self::migrations_to_apply(&applied_migrations, &migration_files)?;
@@ -171,4 +171,4 @@ pub enum Error {
     Mismatch,
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type MigrationResult<T> = Result<T, Error>;

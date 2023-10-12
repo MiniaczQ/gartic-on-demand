@@ -1,9 +1,14 @@
 pub mod app;
-pub mod commands;
 
-use app::{config::CONFIG, AppData, AppError};
-use poise::{serenity_prelude::Ready, Framework};
+use app::{
+    commands,
+    config::CONFIG,
+    handlers::{remove_asset::RemoveAsset, AssetHandler},
+    AppData, AppError,
+};
+use poise::{serenity_prelude::Ready, Event, Framework, FrameworkContext};
 use serenity::prelude::{Context, GatewayIntents};
+use std::{future::Future, pin::Pin};
 
 async fn on_error(error: poise::FrameworkError<'_, AppData, AppError>) {
     match error {
@@ -23,7 +28,7 @@ async fn on_error(error: poise::FrameworkError<'_, AppData, AppError>) {
 async fn main() {
     app::log::setup();
     let options = options();
-    let app_data = AppData::setup().await;
+    let app_data = AppData::setup().await.unwrap();
 
     let intents = GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT
@@ -49,15 +54,31 @@ async fn main() {
         .unwrap();
 }
 
+fn event_handler(
+    ctx: &Context,
+    event: &Event<'_>,
+    fcx: FrameworkContext<'_, AppData, AppError>,
+    data: &AppData,
+) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send>> {
+    for handler in [RemoveAsset] {
+        if let Some(handled) = handler.handle(ctx, event, fcx, data) {
+            return handled;
+        }
+    }
+    Box::pin(async { Ok(()) })
+}
+
 fn options() -> poise::FrameworkOptions<AppData, AppError> {
     poise::FrameworkOptions {
         commands: vec![
             commands::help::help(),
-            commands::assets::add_asset(),
-            commands::assets::show_assets(),
-            commands::assets::remove_asset(),
+            commands::add_asset::add_asset(),
+            commands::start::start(),
+            commands::submit::submit(),
+            commands::abort::abort(),
         ],
         on_error: |error| Box::pin(on_error(error)),
+        event_handler: event_handler,
         ..Default::default()
     }
 }

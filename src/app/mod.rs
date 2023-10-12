@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use rossbot::services::{
     database::{migrations::Migrator, Database},
     provider::Provider,
@@ -8,6 +10,8 @@ use self::config::CONFIG;
 
 pub mod config;
 pub mod log;
+pub mod commands;
+pub mod handlers;
 
 pub struct AppData {
     pub db: Database,
@@ -15,14 +19,13 @@ pub struct AppData {
 }
 
 impl AppData {
-    pub async fn setup() -> Self {
-        let db = Database::setup(&CONFIG.database).await;
-        let sg = Storage::setup(&CONFIG.storage).await;
+    pub async fn setup() -> Result<Self, Box<dyn Error>> {
+        let db = Database::setup(&CONFIG.database).await?;
+        let sg = Storage::setup(&CONFIG.storage).await?;
         Migrator::new(&CONFIG.database.migrator)
             .migrate(&db)
-            .await
-            .unwrap();
-        Self { db, sg }
+            .await?;
+        Ok(Self { db, sg })
     }
 }
 
@@ -33,19 +36,19 @@ pub enum AppError {
     #[error("{0}")]
     UserError(&'static str),
     #[error("{0}")]
-    ApplicationError(&'static str),
+    InternalError(&'static str),
 }
 
-pub use AppError::{ApplicationError, UserError};
+pub use AppError::{InternalError, UserError};
 
-impl<'a> Provider<'a, &'a Database> for AppData {
-    fn get(&'a self) -> &'a Database {
-        &self.db
+impl Provider<Database> for AppData {
+    fn get(&self) -> Database {
+        self.db.clone()
     }
 }
 
-impl<'a> Provider<'a, &'a Storage> for AppData {
-    fn get(&'a self) -> &'a Storage {
-        &self.sg
+impl Provider<Storage> for AppData {
+    fn get(&self) -> Storage {
+        self.sg.clone()
     }
 }

@@ -1,0 +1,2 @@
+DEFINE INDEX one_game_per_user ON game_user_session FIELDS in UNIQUE;
+DEFINE INDEX one_user_per_game ON game_user_session FIELDS out UNIQUE;

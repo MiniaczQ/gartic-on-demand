@@ -1,3 +1,3 @@
-pub trait Provider<'a, T> {
-    fn get(&'a self) -> T;
+pub trait Provider<T> {
+    fn get(&self) -> T;
 }
