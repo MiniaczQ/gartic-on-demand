@@ -17,7 +17,9 @@ pub async fn cancel(ctx: AppContext<'_>) -> Result<(), AppError> {
 pub async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
     let sr: SessionRepository = ctx.data().get();
     let user_id = ctx.author().id;
-    sr.detach_user(user_id).await.map_user("No prevoious session")?;
+    sr.detach_user(user_id)
+        .await
+        .map_user("No prevoious session")?;
     rsx.respond(|f| f.content("Aborted previous session"))
         .await?;
     Ok(())

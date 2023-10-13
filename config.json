@@ -32,11 +32,5 @@
         "migrator": {
             "migrations_dir": "./migrations"
         }
-    },
-    "storage": {
-        "address": "http://127.0.0.1:9000",
-        "access_key_id": "minioadmin",
-        "secret_access_key": "minioadmin",
-        "bucket": "images"
     }
 }

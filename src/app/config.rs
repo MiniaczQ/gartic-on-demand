@@ -2,7 +2,7 @@ use crate::app::log::LogConfig;
 use config::{Config, Environment, File, FileFormat};
 use dotenv::dotenv;
 use lazy_static::lazy_static;
-use rossbot::services::{database::DatabaseConfig, storage::StorageConfig};
+use rossbot::services::database::DatabaseConfig;
 use serde::{de::DeserializeOwned, Deserialize};
 use serenity::model::prelude::{ChannelId, GuildId, RoleId};
 
@@ -31,7 +31,6 @@ pub struct AppConfig {
     pub image: Image,
     pub log: LogConfig,
     pub database: DatabaseConfig,
-    pub storage: StorageConfig,
 }
 
 #[derive(Debug, Deserialize)]
