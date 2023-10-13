@@ -1,4 +1,4 @@
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::Bytes;
 use image::{
     codecs::png::PngEncoder,
     imageops::{self, FilterType},
@@ -11,7 +11,7 @@ const WHITE: Rgba<u8> = Rgba([255u8, 255u8, 255u8, 255u8]);
 
 pub trait RgbaConvert {
     fn from_png(bytes: &Bytes) -> Self;
-    fn to_png(&self) -> Bytes;
+    fn to_png(&self) -> Vec<u8>;
 }
 
 impl RgbaConvert for RgbaImage {
@@ -21,12 +21,11 @@ impl RgbaConvert for RgbaImage {
         reader.decode().unwrap().into_rgba8()
     }
 
-    fn to_png(&self) -> Bytes {
-        let mut bytes = BytesMut::new();
-        let mut writer = (&mut bytes).writer();
+    fn to_png(&self) -> Vec<u8> {
+        let mut writer = Vec::new();
         let encoder = PngEncoder::new(&mut writer);
         self.write_with_encoder(encoder).unwrap();
-        bytes.freeze()
+        writer
     }
 }
 
@@ -141,6 +140,20 @@ pub fn concat_2_2(images: &[RgbaImage]) -> RgbaImage {
     concated
 }
 
+pub fn concat_vertical(images: &[RgbaImage]) -> RgbaImage {
+    let mut delta_height = 0;
+    let w = images.iter().map(|i| i.width()).max().unwrap();
+    let total_height = images.iter().map(|i| i.height()).sum();
+    let mut concated = ImageBuffer::new(w, total_height);
+    for img in images.iter() {
+        let x = 0;
+        let y = delta_height;
+        delta_height += img.height();
+        concated.copy_from(img, x, y).unwrap();
+    }
+    concated
+}
+
 pub fn normalize_image(image: &RgbaImage, width: u32, height: u32) -> RgbaImage {
     image
         .remove_alpha()
@@ -159,7 +172,7 @@ pub fn normalize_images_aoi(images: &[&RgbaImage], width: u32, height: u32) -> V
         .collect()
 }
 
-pub fn combined(images: &[&RgbaImage], width: u32, height: u32) -> Bytes {
+pub fn combined(images: &[&RgbaImage], width: u32, height: u32) -> Vec<u8> {
     let images = normalize_images_aoi(images, width, height);
     let image = concat_2_2(&images);
     image.to_png()

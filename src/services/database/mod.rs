@@ -65,7 +65,7 @@ impl<T> TryFrom<RawRecord<T>> for Record<T> {
         };
         let id: u64 = id.try_into().map_err(|_| IdConversionError)?;
         Ok(Record {
-            id: id as u64,
+            id,
             entry: value.entry,
         })
     }

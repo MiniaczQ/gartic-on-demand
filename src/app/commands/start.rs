@@ -26,6 +26,7 @@ pub async fn start(
     #[min = 1] round: Option<u64>,
 ) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);
+    rsx.init().await?;
     if let Err(e) = process(&mut rsx, ctx, mode, round).await {
         error!(error = ?e);
         rsx.respond(|b| b.content(e.for_user())).await?

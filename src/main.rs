@@ -77,9 +77,10 @@ fn options() -> poise::FrameworkOptions<AppData, AppError> {
             commands::start::start(),
             commands::submit::submit(),
             commands::cancel::cancel(),
+            commands::current::current(),
         ],
         on_error: |error| Box::pin(on_error(error)),
-        event_handler: event_handler,
+        event_handler,
         ..Default::default()
     }
 }

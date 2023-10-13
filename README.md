@@ -1,40 +1,24 @@
-# Flow
+# RossBot
 
-1. Start from round (0-3 draw attr, 4 character)
-2. If round 1-4, find and lock existing, if 0 don't do anything
-3. 
+A discord bot for asynchronous custom Gartic Phone modes gameplay.
 
+Currently supported modes:
+- Rossmode - character creation from attributes
 
-Timeouts 15 min, 2 h
+# Infrastructure
 
-1. Send primary attribute to bot
-2. Bot responds with 1 attribute
-3. Draw another, get response, until you get 4 attributes
-4. Draw character
-5. Send character
+Discord bot in Rust using poise.
+Surrealdb as game logic storage.
+Discord as UI and image store.
 
-At any point, abort the process
+# Unordered roadmap
 
-Start from N attributes
-
-Reroll (abort + start from)
-
-
-
-
-Prevent duplicates:
-- hash image content
-
-
-
-Allow moderation:
-- prevent slurs, etc.
-- prevent duplicate attribute types (double palette, double hat, etc.)
-- blacklist users (check server members)
-- promote users to moderators and admins (check server roles)
-
-
-
-
-Allow tags:
-- nsfw, scenery, monster, palette, etc.
+- [x] MVP - Playable Ross mode
+- [ ] Upgrade database schema - don't match players with matches they previously played
+- [ ] Complete command suite - reroll
+- [ ] Moderation layer - permission and filtration of invalid submissions
+- [ ] Add NSFW variants
+- [ ] Add another mode - Evolution
+- [ ] Duplicate image prevention
+- [ ] Game tagging system
+- [ ] Auxilary commands - get incomplete games, fetch random attributes, etc.

@@ -11,6 +11,17 @@ impl<'a, U, E> ResponseContext<'a, U, E> {
         Self { ctx, handle: None }
     }
 
+    pub async fn init(&mut self) -> Result<(), serenity::Error> {
+        self.respond(|b| b.content("Processing...")).await
+    }
+
+    pub async fn purge(&mut self) -> Result<(), serenity::Error> {
+        if let Some(handle) = self.handle.take() {
+            handle.delete(self.ctx).await?;
+        }
+        Ok(())
+    }
+
     pub async fn respond<'att>(
         &mut self,
         builder: impl for<'b> FnOnce(&'b mut CreateReply<'att>) -> &'b mut CreateReply<'att>,

@@ -39,7 +39,7 @@ pub struct Channels {
     pub draw_this: ChannelId,
     pub in_contruction: ChannelId,
     pub moderation: ChannelId,
-    pub attributes: ChannelId,
+    pub partial: ChannelId,
     pub complete: ChannelId,
 }
 

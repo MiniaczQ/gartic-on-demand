@@ -20,6 +20,10 @@ impl AssetHandler for RemoveAsset {
         let event = event.clone();
         match event {
             Event::ReactionAdd { add_reaction } => Some(Box::pin(async move {
+                let user = add_reaction.user(&ctx).await?;
+                if user.bot {
+                    return Ok(());
+                }
                 let result = ir.delete(add_reaction.message_id.0).await;
                 match result {
                     Ok(_) => {

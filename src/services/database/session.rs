@@ -122,18 +122,22 @@ impl SessionRepository {
         Ok(())
     }
 
-    pub async fn remove_expiry(&self, user_id: UserId) -> DbResult<()> {
+    pub async fn remove_expiry(&self, user_id: UserId) -> DbResult<Session> {
         let query = r#"
         UPDATE type::table($table) SET
             user.expires_at = NONE
         WHERE user.user_id = $user_id
+        RETURN BEFORE
         "#;
-        self.db
+        let mut result = self
+            .db
             .query(query)
             .bind(("table", Self::TABLE))
             .bind(("user_id", user_id))
             .await?;
-        Ok(())
+        let session: Option<RawRecord<Session>> = result.take(0)?;
+        let session = session.ok_or(DbError::NotFound)?;
+        Ok(session.entry)
     }
 
     pub async fn attach_image(&self, user_id: UserId, image: u64) -> DbResult<()> {

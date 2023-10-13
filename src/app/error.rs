@@ -10,7 +10,7 @@ pub enum AppError {
     InternalError(Box<dyn Error + Send + Sync>, &'static str),
 }
 
-const INTERNAL: &'static str = "Internal server error";
+const INTERNAL: &str = "Internal server error";
 
 impl AppError {
     pub fn user(e: impl Error + Send + Sync + 'static, msg: &'static str) -> Self {

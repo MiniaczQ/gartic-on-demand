@@ -5,6 +5,8 @@ use poise::{Event, FrameworkContext};
 use serenity::prelude::Context;
 use std::{future::Future, pin::Pin};
 
+type AppFuture = Pin<Box<dyn Future<Output = Result<(), AppError>> + Send>>;
+
 pub trait AssetHandler {
     fn handle(
         &self,
@@ -12,5 +14,5 @@ pub trait AssetHandler {
         event: &Event<'_>,
         _fcx: FrameworkContext<'_, AppData, AppError>,
         data: &AppData,
-    ) -> Option<Pin<Box<dyn Future<Output = Result<(), AppError>> + Send>>>;
+    ) -> Option<AppFuture>;
 }

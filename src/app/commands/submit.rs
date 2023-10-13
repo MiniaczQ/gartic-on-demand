@@ -4,7 +4,7 @@ use crate::app::{
     config::CONFIG,
     error::ConvertError,
     response::ResponseContext,
-    util::{display_started_round, fetch_image_from_attachment},
+    util::{display_started_round, extract_2x2_image, fetch_image_from_attachment},
     AppContext, AppError,
 };
 use chrono::Utc;
@@ -15,19 +15,15 @@ use rossbot::services::{
         session::{SessionRepository, UserSession},
     },
     gamemodes::GameLogic,
-    image_processing::{normalize_image, RgbaConvert},
+    image_processing::{concat_vertical, normalize_image, RgbaConvert},
     provider::Provider,
 };
 use tracing::error;
 
-#[derive(Debug, poise::ChoiceParameter)]
-pub enum GamemodeArg {
-    Ross,
-}
-
 #[poise::command(slash_command, guild_only)]
 pub async fn submit(ctx: AppContext<'_>, attachment: Attachment) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);
+    rsx.init().await?;
     if let Err(e) = process(&mut rsx, ctx, attachment).await {
         error!(error = ?e);
         rsx.respond(|b| b.content(e.for_user())).await?
@@ -45,23 +41,38 @@ pub async fn process(
     let ir: ImageRepository = ctx.data().get();
     let user_id = ctx.author().id;
 
-    sr.remove_expiry(user_id)
+    let session = sr
+        .remove_expiry(user_id)
         .await
         .map_internal("Failed to find existing session")?;
 
-    let image = fetch_image_from_attachment(attachment)
+    let round = session.game.round();
+    let is_last = session.game.mode.last_round() == round;
+
+    let image = fetch_image_from_attachment(&attachment)
         .await
         .map_user("Attachment is not a valid image")?;
 
-    let image = normalize_image(&image, CONFIG.image.width, CONFIG.image.height);
-    let image = AttachmentType::Bytes {
-        data: Cow::Owned(image.to_png().to_vec()),
-        filename: ctx.id().to_string() + ".png",
+    let (image, channel) = if is_last {
+        let channel = CONFIG.channels.complete;
+        let attributes = extract_2x2_image(ctx, &session).await?;
+        let image = normalize_image(&image, 2 * CONFIG.image.width, 2 * CONFIG.image.height);
+        let image = concat_vertical(&[attributes, image]);
+        let image = AttachmentType::Bytes {
+            data: Cow::Owned(image.to_png().to_vec()),
+            filename: ctx.id().to_string() + ".png",
+        };
+        (image, channel)
+    } else {
+        let channel = CONFIG.channels.partial;
+        let image = normalize_image(&image, CONFIG.image.width, CONFIG.image.height);
+        let image = AttachmentType::Bytes {
+            data: Cow::Owned(image.to_png().to_vec()),
+            filename: ctx.id().to_string() + ".png",
+        };
+        (image, channel)
     };
-
-    let message = CONFIG
-        .channels
-        .attributes
+    let message = channel
         .send_message(ctx, |m| {
             m.add_file(image).content(format!("<@{}>", user_id))
         })
@@ -83,14 +94,11 @@ pub async fn process(
     rsx.respond(|f| f.content("Submited!")).await?;
     rsx.reset();
 
-    let next_round = game.round();
-    let previous_round = next_round - 1;
-    let was_last = game.mode.last_round() == previous_round;
-    if was_last {
+    if is_last {
         rsx.respond(|b| b.content("This was the final round.\nUse `/start` to play again."))
             .await?;
     } else {
-        let next_round = next_round;
+        let next_round = game.round();
         let user = UserSession {
             user_id,
             expires_at: Utc::now().add(game.mode.time_limit(next_round)),
