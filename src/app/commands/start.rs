@@ -8,7 +8,7 @@ use chrono::Utc;
 use poise::serenity_prelude::UserId;
 use rossbot::services::{
     database::session::{Session, SessionRepository, UserSession},
-    gamemodes::{Game, GameLogic, GameSession},
+    gamemodes::{GameLogic, GameSession, Mode},
     provider::Provider,
 };
 use std::ops::{Add, Sub};
@@ -93,8 +93,8 @@ async fn find_or_create_session(
     Ok(session)
 }
 
-fn map_game(mode: GameArg) -> Game {
+fn map_game(mode: GameArg) -> Mode {
     match mode {
-        GameArg::Ross => Game::Ross,
+        GameArg::Ross => Mode::Ross,
     }
 }

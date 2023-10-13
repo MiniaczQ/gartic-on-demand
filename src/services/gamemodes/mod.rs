@@ -6,12 +6,12 @@ use std::time::Duration;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GameSession {
-    pub mode: Game,
+    pub mode: Mode,
     pub images: Vec<u64>,
 }
 
 impl GameSession {
-    pub fn new(mode: Game) -> Self {
+    pub fn new(mode: Mode) -> Self {
         Self {
             images: vec![],
             mode,
@@ -24,26 +24,26 @@ impl GameSession {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub enum Game {
+pub enum Mode {
     Ross,
 }
 
-impl GameLogic for Game {
+impl GameLogic for Mode {
     fn last_round(&self) -> u64 {
         match self {
-            Game::Ross => Ross.last_round(),
+            Mode::Ross => Ross.last_round(),
         }
     }
 
     fn time_limit(&self, round: u64) -> Duration {
         match self {
-            Game::Ross => Ross.time_limit(round),
+            Mode::Ross => Ross.time_limit(round),
         }
     }
 
     fn prompt(&self, round: u64) -> &'static str {
         match self {
-            Game::Ross => Ross.prompt(round),
+            Mode::Ross => Ross.prompt(round),
         }
     }
 }

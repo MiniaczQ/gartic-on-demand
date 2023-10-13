@@ -1,6 +1,7 @@
 pub mod images;
 pub mod migrations;
 pub mod session;
+pub mod sessionv2;
 
 use std::ops::{Deref, DerefMut};
 
@@ -130,3 +131,13 @@ pub enum DbError {
 }
 
 pub type DbResult<T> = Result<T, DbError>;
+
+pub trait MapToNotFound<T> {
+    fn found(self) -> DbResult<T>;
+}
+
+impl<T> MapToNotFound<T> for Option<T> {
+    fn found(self) -> DbResult<T> {
+        self.ok_or(DbError::NotFound)
+    }
+}

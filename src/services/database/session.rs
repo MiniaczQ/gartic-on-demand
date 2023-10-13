@@ -1,6 +1,6 @@
 use super::{Database, DbError, DbResult, RawRecord};
 use crate::services::{
-    gamemodes::{Game, GameLogic, GameSession},
+    gamemodes::{GameLogic, GameSession, Mode},
     provider::Provider,
 };
 use chrono::{DateTime, Utc};
@@ -76,7 +76,7 @@ impl SessionRepository {
 
     pub async fn find_game_for_user(
         &self,
-        mode: Game,
+        mode: Mode,
         round: u64,
         user: UserSession,
     ) -> DbResult<Session> {
