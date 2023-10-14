@@ -5,7 +5,10 @@ use crate::app::{
     AppContext,
 };
 use rossbot::services::{
-    database::sessionv2::{Active, MatchWithSessions, SessionRepository2},
+    database::{
+        session::{Active, LobbyWithSessions, SessionRepository},
+        DbError,
+    },
     gamemodes::{GameLogic, Mode},
     provider::Provider,
 };
@@ -39,53 +42,62 @@ async fn process(
     mode: GameArg,
     round: Option<u64>,
 ) -> Result<(), AppError> {
-    let sr: SessionRepository2 = ctx.data().get();
+    let sr: SessionRepository = ctx.data().get();
     let uid = ctx.author().id.0;
     let round = round.unwrap_or(1).sub(1);
 
-    let mby_session = sr.get(uid).await;
-    if let Ok(session) = mby_session {
-        rsx.respond(|f| f.content(session.prompt_already_running()))
-            .await?;
-        return Ok(());
-    }
+    sr.ensure_user(uid)
+        .await
+        .map_internal("Failed to create user")?;
 
     sr.stop_expired()
         .await
         .map_internal("Failed to unlock expired sessions")?;
 
-    let match_ = find_or_create_session(sr, uid, mode, round).await?;
-    let image = extract_2x2_image(ctx, &match_).await?;
+    let maybe_lobby = sr.get(uid).await;
+    if let Ok(lobby) = maybe_lobby {
+        let image = extract_2x2_image(ctx, &lobby).await?;
+        let attachment = image_to_attachment(image);
+        rsx.respond(|f| {
+            f.attachment(attachment)
+                .content(lobby.prompt_already_running())
+        })
+        .await?;
+        return Ok(());
+    }
+
+    let lobby = find_or_create_session(sr, uid, mode, round).await?;
+    let image = extract_2x2_image(ctx, &lobby).await?;
     let attachment = image_to_attachment(image);
     rsx.purge().await?;
-    rsx.respond(|f| f.attachment(attachment).content(match_.prompt_started()))
+    rsx.respond(|f| f.attachment(attachment).content(lobby.prompt_started()))
         .await?;
     Ok(())
 }
 
 async fn find_or_create_session(
-    sr: SessionRepository2,
+    sr: SessionRepository,
     uid: u64,
     mode: GameArg,
     round: u64,
-) -> Result<MatchWithSessions<Active>, AppError> {
+) -> Result<LobbyWithSessions<Active>, AppError> {
     let mode = map_game(mode);
 
     if round > mode.last_round() {
         None.map_user("Gamemode does not support this many rounds")?;
     }
 
-    let mby_match = sr.find_attach(uid, mode, round).await;
-    let match_ = match (mby_match, round) {
-        (Ok(match_), _) => match_,
-        (Err(_), 0) => sr
+    let maybe_lobby = sr.find_attach(uid, mode, round).await;
+    let lobby = match (maybe_lobby, round) {
+        (Ok(lobby), _) => lobby,
+        (Err(DbError::NotFound), 0) => sr
             .create_attach(uid, mode)
             .await
             .map_internal("Failed to create game session")?,
         (e, _) => e.map_user("Did not find pending sessions")?,
     };
 
-    Ok(match_)
+    Ok(lobby)
 }
 
 fn map_game(mode: GameArg) -> Mode {

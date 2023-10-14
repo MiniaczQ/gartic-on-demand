@@ -7,9 +7,9 @@ use crate::app::{
 };
 use poise::serenity_prelude::{Attachment, AttachmentType};
 use rossbot::services::{
-    database::sessionv2::SessionRepository2,
+    database::session::SessionRepository,
     gamemodes::GameLogic,
-    image_processing::{concat_vertical, normalize_image, RgbaConvert},
+    image_processing::{concat_vertical, normalize_image_aoi, RgbaConvert},
     provider::Provider,
 };
 use std::borrow::Cow;
@@ -32,16 +32,16 @@ pub async fn process(
     ctx: AppContext<'_>,
     attachment: Attachment,
 ) -> Result<(), AppError> {
-    let sr: SessionRepository2 = ctx.data().get();
+    let sr: SessionRepository = ctx.data().get();
     let uid = ctx.author().id.0;
 
-    let match_ = sr
+    let lobby = sr
         .start_submitting(uid)
         .await
         .map_internal("Failed to find existing session")?;
 
-    let round = match_.round();
-    let is_last = match_.m.mode.last_round() == round;
+    let round = lobby.round();
+    let is_last = lobby.lobby.mode.last_round() == round;
 
     let image = fetch_image_from_attachment(&attachment)
         .await
@@ -49,8 +49,8 @@ pub async fn process(
 
     let (image, channel) = if is_last {
         let channel = CONFIG.channels.complete;
-        let attributes = extract_2x2_image(ctx, &match_).await?;
-        let image = normalize_image(&image, 2 * CONFIG.image.width, 2 * CONFIG.image.height);
+        let attributes = extract_2x2_image(ctx, &lobby).await?;
+        let image = normalize_image_aoi(&image, 2 * CONFIG.image.width, 2 * CONFIG.image.height);
         let image = concat_vertical(&[attributes, image]);
         let image = AttachmentType::Bytes {
             data: Cow::Owned(image.to_png().to_vec()),
@@ -59,7 +59,7 @@ pub async fn process(
         (image, channel)
     } else {
         let channel = CONFIG.channels.partial;
-        let image = normalize_image(&image, CONFIG.image.width, CONFIG.image.height);
+        let image = normalize_image_aoi(&image, CONFIG.image.width, CONFIG.image.height);
         let image = AttachmentType::Bytes {
             data: Cow::Owned(image.to_png().to_vec()),
             filename: ctx.id().to_string() + ".png",
@@ -81,16 +81,16 @@ pub async fn process(
         rsx.respond(|b| b.content("This was the final round.\nUse `/start` to play again."))
             .await?;
     } else {
-        let next_round = match_.round() + 1;
-        let match_ = sr
-            .find_attach(uid, match_.m.mode, next_round)
+        let next_round = lobby.round() + 1;
+        let lobby = sr
+            .find_attach(uid, lobby.lobby.mode, next_round)
             .await
             .map_user("No further rounds available currently.\nUse `/start` to play again.")?;
 
-        let image = extract_2x2_image(ctx, &match_).await?;
+        let image = extract_2x2_image(ctx, &lobby).await?;
         let attachment = image_to_attachment(image);
         rsx.purge().await?;
-        rsx.respond(|f| f.attachment(attachment).content(match_.prompt_started()))
+        rsx.respond(|f| f.attachment(attachment).content(lobby.prompt_started()))
             .await?;
     }
     Ok(())

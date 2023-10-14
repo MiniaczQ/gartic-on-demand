@@ -9,8 +9,8 @@ use poise::serenity_prelude::{Attachment, AttachmentType, ChannelId, MessageId};
 use reqwest::header::{self, HeaderValue};
 use rossbot::services::{
     database::{
-        images::{AssetKind, ImageRepository},
-        sessionv2::MatchWithSessions,
+        assets::{AssetKind, ImageRepository},
+        session::LobbyWithSessions,
     },
     image_processing::{concat_2_2, RgbaConvert},
     provider::Provider,
@@ -36,17 +36,17 @@ pub async fn fetch_image_from_attachment(attachment: &Attachment) -> Option<Rgba
 
 pub async fn extract_2x2_image<T>(
     ctx: AppContext<'_>,
-    match_: &MatchWithSessions<T>,
+    lobby: &LobbyWithSessions<T>,
 ) -> Result<RgbaImage, AppError> {
     let ar: ImageRepository = ctx.data().get();
     let mut images = Vec::with_capacity(4);
-    for what in match_.prev.iter().map(|a| a.what) {
+    for what in lobby.accepted.iter().map(|a| a.state.what) {
         let image = fetch_image_from_channel(ctx, CONFIG.channels.partial, what).await?;
         images.push(image);
     }
     if images.len() < 4 {
         let assets = ar
-            .random(AssetKind::DrawThis.into(), 1)
+            .random(AssetKind::DrawThis, 1)
             .await
             .map_internal("Missing DrawThis assets")?;
         for image in assets.into_iter().map(|a| a.id) {
@@ -56,7 +56,7 @@ pub async fn extract_2x2_image<T>(
     }
     if images.len() < 4 {
         let assets = ar
-            .random(AssetKind::InConstruction.into(), 4 - images.len() as u32)
+            .random(AssetKind::InConstruction, 4 - images.len() as u32)
             .await
             .map_internal("Missing InConstruction assets")?;
         for image in assets.into_iter().map(|a| a.id) {

@@ -4,7 +4,7 @@ use crate::app::{
     util::{extract_2x2_image, image_to_attachment},
     AppContext, AppError,
 };
-use rossbot::services::{database::sessionv2::SessionRepository2, provider::Provider};
+use rossbot::services::{database::session::SessionRepository, provider::Provider};
 use tracing::error;
 
 #[poise::command(slash_command, guild_only)]
@@ -20,15 +20,18 @@ pub async fn current(ctx: AppContext<'_>) -> Result<(), AppError> {
 }
 
 pub async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
-    let sr: SessionRepository2 = ctx.data().get();
+    let sr: SessionRepository = ctx.data().get();
     let uid = ctx.author().id.0;
-    let match_ = sr.get(uid).await.map_user("No current game")?;
-    let image = extract_2x2_image(ctx, &match_).await?;
+    sr.stop_expired()
+        .await
+        .map_internal("Failed to unlock expired sessions")?;
+    let lobby = sr.get(uid).await.map_user("No current game")?;
+    let image = extract_2x2_image(ctx, &lobby).await?;
     let attachment = image_to_attachment(image);
     rsx.purge().await?;
     rsx.respond(|f| {
         f.attachment(attachment)
-            .content(match_.prompt_already_running())
+            .content(lobby.prompt_already_running())
     })
     .await?;
     Ok(())

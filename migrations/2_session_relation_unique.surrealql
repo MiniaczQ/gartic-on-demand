@@ -1,1 +1,0 @@
-DEFINE INDEX one_user_session_per_match ON session FIELDS in, out UNIQUE;
