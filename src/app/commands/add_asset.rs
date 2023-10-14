@@ -17,6 +17,7 @@ pub enum AssetKindArg {
     DrawThis,
 }
 
+/// Add an asset
 #[poise::command(slash_command, guild_only)]
 pub async fn add_asset(
     ctx: AppContext<'_>,

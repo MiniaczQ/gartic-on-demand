@@ -4,7 +4,7 @@ pub mod session;
 
 use std::ops::{Deref, DerefMut};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use surrealdb::{
     engine::any::{connect, Any},
     sql::{Id, Thing},
@@ -93,7 +93,7 @@ impl<T> IdConvert for Vec<RawRecord<T>> {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Record<T = ()> {
     pub id: u64,
     #[serde(flatten)]

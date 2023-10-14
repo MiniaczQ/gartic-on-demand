@@ -1,15 +1,17 @@
-use super::{Database, DbResult, MapToNotFound};
+use super::{Database, DbResult, IdConvert, MapToNotFound, RawRecord, Record};
 use crate::services::{
     gamemodes::{GameLogic, Mode},
     provider::Provider,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::ops::Add;
+use std::{fmt::Display, ops::Add};
 use tracing::info;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct User;
+pub struct User<'a> {
+    pub name: &'a str,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Active {
@@ -66,19 +68,30 @@ pub enum SessionState {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum SubmissionKind {
+    RossAttribute,
+    RossComplete,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Session {
     pub started_at: DateTime<Utc>,
+    pub round: u64,
+    pub kind: SubmissionKind,
     pub state: SessionState,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TypedSession<T> {
     pub started_at: DateTime<Utc>,
+    pub round: u64,
+    pub kind: SubmissionKind,
     pub state: T,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Lobby {
+    pub created_at: DateTime<Utc>,
     pub mode: Mode,
 }
 
@@ -126,9 +139,13 @@ pub struct SessionRepository {
 }
 
 impl SessionRepository {
-    pub async fn ensure_user(&self, uid: u64) -> DbResult<()> {
-        let query = r#"INSERT INTO users {id: $uid}"#;
-        self.db.query(query).bind(("uid", uid)).await?;
+    pub async fn ensure_user(&self, uid: u64, name: &str) -> DbResult<()> {
+        let user = Record {
+            id: uid,
+            entry: User { name },
+        };
+        let query = r#"INSERT INTO users $user"#;
+        self.db.query(query).bind(("user", user)).await?;
         Ok(())
     }
 
@@ -157,7 +174,6 @@ impl SessionRepository {
 
     /// Active -> Expired
     pub async fn stop_expired(&self) -> DbResult<()> {
-        info!("Stop expired");
         let now = Utc::now();
         let expired = SessionState::Expired { when: now };
         let query = r#"
@@ -259,15 +275,18 @@ impl SessionRepository {
         let now = Utc::now();
         let until = now.add(mode.time_limit(round));
         let active = SessionState::Active { until };
+        let kind = mode.submission_kind(round);
         let session = Session {
             started_at: now,
+            round,
+            kind,
             state: active,
         };
+        // AND array::any(id<-(sessions WHERE in IS $user AND state.type NOT IN ["Cancelled", "Expired"])) IS false
         let query = r#"
         LET $user = type::thing("users", $uid);
         LET $lobby = SELECT * FROM ONLY lobbies
             WHERE mode = $mode
-            AND array::any(id<-(sessions WHERE in IS $user)) IS false
             AND array::any(id<-(sessions WHERE state.type IN ["Uploading", "Pending"])) IS false
             AND array::len(id<-(sessions WHERE state.type IS "Accepted")) = $round
             ORDER BY rand() LIMIT 1;
@@ -300,13 +319,20 @@ impl SessionRepository {
     pub async fn create_attach(&self, uid: u64, mode: Mode) -> DbResult<LobbyWithSessions<Active>> {
         info!(uid = uid, mode = ?mode, "Create attach");
         let now = Utc::now();
-        let until = now.add(mode.time_limit(0));
+        let round = 0;
+        let until = now.add(mode.time_limit(round));
         let active = SessionState::Active { until };
+        let kind = mode.submission_kind(round);
         let session = Session {
             started_at: now,
+            round: 0,
+            kind,
             state: active,
         };
-        let lobby = Lobby { mode };
+        let lobby = Lobby {
+            mode,
+            created_at: now,
+        };
         let query = r#"
         LET $user = type::thing("users", $uid);
         LET $lobby = CREATE ONLY lobbies CONTENT $lobby_content;
@@ -332,6 +358,100 @@ impl SessionRepository {
             .bind(("session_content", session))
             .await?;
         result.take::<Option<_>>(3)?.found()
+    }
+
+    pub async fn active_users(&self) -> DbResult<Vec<u64>> {
+        let query = r#"
+        SELECT in AS id
+        FROM sessions
+        WHERE state.type IS "Active"
+        "#;
+        let mut result = self.db.query(query).await?;
+        let users = result
+            .take::<Vec<RawRecord<()>>>(0)?
+            .convert_id()?
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+        Ok(users)
+    }
+
+    pub async fn incomplete_games(&self) -> DbResult<Vec<IncompleteGames>> {
+        let query = r#"
+        SELECT
+            mode,
+            count() AS count,
+            array::len(<-(sessions WHERE state.type == "Accepted")) AS round
+            FROM lobbies
+            WHERE <-(sessions WHERE state.type == "Active") IS []
+            GROUP BY mode, round
+        "#;
+        let mut result = self.db.query(query).await?;
+        let stats = result.take::<Vec<_>>(0)?.filter();
+        Ok(stats)
+    }
+
+    pub async fn incomplete_games_for_user(&self, uid: u64) -> DbResult<Vec<IncompleteGames>> {
+        let query = r#"
+        SELECT
+            mode,
+            count() AS count,
+            array::len(<-(sessions WHERE state.type == "Accepted")) AS round
+            FROM lobbies
+            WHERE <-(sessions WHERE state.type == "Active") IS []
+            AND array::any(id<-(sessions WHERE meta::id(in) IS $uid AND state.type NOT IN ["Cancelled", "Expired"])) IS false
+            GROUP BY mode, round
+        "#;
+        let mut result = self.db.query(query).bind(("uid", uid)).await?;
+        let stats = result.take::<Vec<_>>(0)?.filter();
+        Ok(stats)
+    }
+
+    pub async fn random_attributes(&self, n: u64) -> DbResult<Vec<u64>> {
+        let query = r#"
+        LET $attr = SELECT *
+            FROM sessions
+            WHERE state.type = "Accepted"
+            ORDER BY rand() LIMIT $limit;
+        SELECT state.what AS id FROM $attr
+        "#;
+        let mut result = self.db.query(query).bind(("limit", n)).await?;
+        let users = result
+            .take::<Vec<Record<()>>>(1)?
+            .into_iter()
+            .map(|r| r.id)
+            .collect();
+        Ok(users)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct IncompleteGames {
+    pub mode: Mode,
+    pub count: u64,
+    pub round: u64,
+}
+
+impl Display for IncompleteGames {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "{:?} mode round {} available: {}",
+            self.mode,
+            self.round + 1,
+            self.count
+        ))
+    }
+}
+
+pub trait PlayableFilter {
+    fn filter(self) -> Self;
+}
+
+impl PlayableFilter for Vec<IncompleteGames> {
+    fn filter(self) -> Self {
+        self.into_iter()
+            .filter(|p| p.round != p.mode.last_round() && p.round != 0)
+            .collect()
     }
 }
 

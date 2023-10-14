@@ -1,6 +1,6 @@
 use crate::services::provider::Provider;
 
-use super::{Count, Database, DbResult, IdConvert, MapToNotFound, RawRecord, Record};
+use super::{Database, DbResult, IdConvert, MapToNotFound, RawRecord, Record};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -63,32 +63,6 @@ impl ImageRepository {
             .await?;
         let images = result.take::<Vec<RawRecord<Asset>>>(0)?.convert_id()?;
         Ok(images)
-    }
-
-    pub async fn get(
-        &self,
-        kind: impl Into<AssetKind>,
-        limit: u64,
-        start: u64,
-    ) -> DbResult<Vec<Record<Asset>>> {
-        let kind: AssetKind = kind.into();
-        let query = r#"SELECT * FROM assets WHERE kind = $kind LIMIT $limit START $start"#;
-        let mut result = self
-            .db
-            .query(query)
-            .bind(("kind", kind))
-            .bind(("limit", limit))
-            .bind(("start", start))
-            .await?;
-        let images = result.take::<Vec<RawRecord<Asset>>>(0)?.convert_id()?;
-        Ok(images)
-    }
-
-    pub async fn count(&self, kind: AssetKind) -> DbResult<u64> {
-        let query = r#"SELECT count() FROM assets WHERE kind = $kind GROUP ALL"#;
-        let mut result = self.db.query(query).bind(("kind", kind)).await?;
-        let count = result.take::<Option<Count>>(0)?.found()?;
-        Ok(count.count)
     }
 }
 

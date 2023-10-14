@@ -1,1 +1,0 @@
-DEFINE INDEX one_user_session_per_lobby ON sessions FIELDS in, out UNIQUE;

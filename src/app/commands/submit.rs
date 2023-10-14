@@ -15,6 +15,7 @@ use rossbot::services::{
 use std::borrow::Cow;
 use tracing::error;
 
+/// Submit an image to the current game session
 #[poise::command(slash_command, guild_only)]
 pub async fn submit(ctx: AppContext<'_>, attachment: Attachment) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);

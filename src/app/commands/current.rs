@@ -7,6 +7,7 @@ use crate::app::{
 use rossbot::services::{database::session::SessionRepository, provider::Provider};
 use tracing::error;
 
+/// Get current game session
 #[poise::command(slash_command, guild_only)]
 pub async fn current(ctx: AppContext<'_>) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);

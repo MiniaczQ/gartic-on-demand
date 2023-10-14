@@ -6,7 +6,8 @@
         "in_contruction": 1161674543446884412,
         "moderation": 1158873858565222451,
         "partial": 1158069261034594346,
-        "complete": 1158069237647147019
+        "complete": 1158069237647147019,
+        "stats": 1162816678695010496
     },
     "roles": {
         "admin": 1159068106635874405,
@@ -23,7 +24,7 @@
         "height": 424
     },
     "log": {
-        "directives": "warn,rossbot=trace,surrealdb=debug"
+        "directives": "warn,rossbot=trace,surrealdb=debug,rossbot::app::stats_printer=error"
     },
     "database": {
         "address": "ws://127.0.0.1:8000",

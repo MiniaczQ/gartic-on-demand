@@ -14,6 +14,7 @@ pub mod error;
 pub mod handlers;
 pub mod log;
 pub mod response;
+pub mod stats_printer;
 pub mod util;
 
 pub struct AppData {

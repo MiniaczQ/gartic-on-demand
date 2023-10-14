@@ -5,11 +5,13 @@ use app::{
     config::CONFIG,
     error::AppError,
     handlers::{remove_asset::RemoveAsset, AssetHandler},
+    stats_printer::StatsPrinter,
     AppData,
 };
 use poise::{serenity_prelude::Ready, Event, Framework, FrameworkContext};
 use serenity::prelude::{Context, GatewayIntents};
 use std::{future::Future, pin::Pin};
+use tokio::spawn;
 
 async fn on_error(error: poise::FrameworkError<'_, AppData, AppError>) {
     match error {
@@ -42,8 +44,10 @@ async fn main() {
         .token(token)
         .setup(
             move |ctx: &Context, _ready: &Ready, framework: &Framework<AppData, AppError>| {
+                let stats_printer = StatsPrinter::new(app_data.db.clone(), ctx.clone());
                 Box::pin(async move {
                     poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                    spawn(stats_printer.run());
                     Ok(app_data)
                 })
             },
@@ -78,6 +82,8 @@ fn options() -> poise::FrameworkOptions<AppData, AppError> {
             commands::submit::submit(),
             commands::cancel::cancel(),
             commands::current::current(),
+            commands::incomplete_games::incomplete_games(),
+            commands::random_attributes::random_attributes(),
         ],
         on_error: |error| Box::pin(on_error(error)),
         event_handler,

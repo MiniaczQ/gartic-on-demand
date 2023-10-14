@@ -20,6 +20,7 @@ pub enum GameArg {
     Ross,
 }
 
+/// Start a new game session, by default from round 1
 #[poise::command(slash_command, guild_only)]
 pub async fn start(
     ctx: AppContext<'_>,
@@ -43,10 +44,11 @@ async fn process(
     round: Option<u64>,
 ) -> Result<(), AppError> {
     let sr: SessionRepository = ctx.data().get();
-    let uid = ctx.author().id.0;
+    let author = ctx.author();
+    let uid = author.id.0;
     let round = round.unwrap_or(1).sub(1);
 
-    sr.ensure_user(uid)
+    sr.ensure_user(uid, &author.name)
         .await
         .map_internal("Failed to create user")?;
 

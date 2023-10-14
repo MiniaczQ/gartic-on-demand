@@ -4,6 +4,8 @@ use self::ross::Ross;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
+use super::database::session::SubmissionKind;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GameSession {
     pub mode: Mode,
@@ -41,6 +43,12 @@ impl GameLogic for Mode {
         }
     }
 
+    fn submission_kind(&self, round: u64) -> SubmissionKind {
+        match self {
+            Mode::Ross => Ross.submission_kind(round),
+        }
+    }
+
     fn prompt(&self, round: u64) -> &'static str {
         match self {
             Mode::Ross => Ross.prompt(round),
@@ -50,6 +58,7 @@ impl GameLogic for Mode {
 
 pub trait GameLogic {
     fn last_round(&self) -> u64;
+    fn submission_kind(&self, round: u64) -> SubmissionKind;
     fn time_limit(&self, round: u64) -> Duration;
     fn prompt(&self, round: u64) -> &'static str;
 }

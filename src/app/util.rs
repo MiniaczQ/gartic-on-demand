@@ -76,7 +76,7 @@ pub fn image_to_attachment<'a>(image: RgbaImage) -> AttachmentType<'a> {
     }
 }
 
-async fn fetch_image_from_channel(
+pub async fn fetch_image_from_channel(
     ctx: AppContext<'_>,
     channel: ChannelId,
     image_id: u64,
