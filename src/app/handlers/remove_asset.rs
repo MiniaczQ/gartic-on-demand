@@ -1,6 +1,6 @@
 use super::{AppData, AppError, AssetHandler};
 use poise::{Event, FrameworkContext};
-use rossbot::services::{database::images::ImageRepository, provider::Provider};
+use rossbot::services::{database::assets::ImageRepository, provider::Provider};
 use serenity::prelude::Context;
 use std::{future::Future, pin::Pin};
 use tracing::error;

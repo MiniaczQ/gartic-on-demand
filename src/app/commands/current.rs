@@ -1,10 +1,13 @@
 use crate::app::{
-    error::ConvertError, response::ResponseContext, util::display_already_running_round,
+    error::ConvertError,
+    response::ResponseContext,
+    util::{extract_2x2_image, image_to_attachment},
     AppContext, AppError,
 };
 use rossbot::services::{database::session::SessionRepository, provider::Provider};
 use tracing::error;
 
+/// Get current game session
 #[poise::command(slash_command, guild_only)]
 pub async fn current(ctx: AppContext<'_>) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);
@@ -19,11 +22,18 @@ pub async fn current(ctx: AppContext<'_>) -> Result<(), AppError> {
 
 pub async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
     let sr: SessionRepository = ctx.data().get();
-    let user_id = ctx.author().id;
-    let session = sr
-        .get_current_user_game(user_id)
+    let uid = ctx.author().id.0;
+    sr.stop_expired()
         .await
-        .map_user("No current game")?;
-    display_already_running_round(rsx, ctx, session).await?;
+        .map_internal("Failed to unlock expired sessions")?;
+    let lobby = sr.get(uid).await.map_user("No current game")?;
+    let image = extract_2x2_image(ctx, &lobby).await?;
+    let attachment = image_to_attachment(image);
+    rsx.purge().await?;
+    rsx.respond(|f| {
+        f.attachment(attachment)
+            .content(lobby.prompt_already_running())
+    })
+    .await?;
     Ok(())
 }

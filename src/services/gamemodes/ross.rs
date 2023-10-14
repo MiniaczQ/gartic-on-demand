@@ -1,3 +1,5 @@
+use crate::services::database::session::SubmissionKind;
+
 use super::GameLogic;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -17,6 +19,14 @@ impl GameLogic for Ross {
             Duration::from_secs(900)
         } else {
             Duration::from_secs(5200)
+        }
+    }
+
+    fn submission_kind(&self, round: u64) -> SubmissionKind {
+        if round < LAST_ROUND {
+            SubmissionKind::RossAttribute
+        } else {
+            SubmissionKind::RossComplete
         }
     }
 

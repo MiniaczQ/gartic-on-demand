@@ -4,7 +4,7 @@ use crate::app::{
 };
 use poise::serenity_prelude::{Attachment, AttachmentType, ChannelId};
 use rossbot::services::{
-    database::images::{AssetKind, Image, ImageRepository},
+    database::assets::{Asset, AssetKind, ImageRepository},
     image_processing::{normalize_image, RgbaConvert},
     provider::Provider,
 };
@@ -17,6 +17,7 @@ pub enum AssetKindArg {
     DrawThis,
 }
 
+/// Add an asset
 #[poise::command(slash_command, guild_only)]
 pub async fn add_asset(
     ctx: AppContext<'_>,
@@ -61,7 +62,7 @@ pub async fn process(
         .await?;
 
     let ir: ImageRepository = ctx.data().get();
-    ir.create(message.id.0, Image::new(kind.into(), user.id))
+    ir.create(message.id.0, Asset::new(kind, user.id.0))
         .await
         .map_internal("Failed to add image to database")?;
 

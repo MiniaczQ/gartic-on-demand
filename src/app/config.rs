@@ -40,6 +40,7 @@ pub struct Channels {
     pub moderation: ChannelId,
     pub partial: ChannelId,
     pub complete: ChannelId,
+    pub stats: ChannelId,
 }
 
 #[derive(Debug, Deserialize)]

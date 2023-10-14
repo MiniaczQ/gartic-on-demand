@@ -4,14 +4,16 @@ use self::ross::Ross;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
+use super::database::session::SubmissionKind;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GameSession {
-    pub mode: Game,
+    pub mode: Mode,
     pub images: Vec<u64>,
 }
 
 impl GameSession {
-    pub fn new(mode: Game) -> Self {
+    pub fn new(mode: Mode) -> Self {
         Self {
             images: vec![],
             mode,
@@ -24,32 +26,39 @@ impl GameSession {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
-pub enum Game {
+pub enum Mode {
     Ross,
 }
 
-impl GameLogic for Game {
+impl GameLogic for Mode {
     fn last_round(&self) -> u64 {
         match self {
-            Game::Ross => Ross.last_round(),
+            Mode::Ross => Ross.last_round(),
         }
     }
 
     fn time_limit(&self, round: u64) -> Duration {
         match self {
-            Game::Ross => Ross.time_limit(round),
+            Mode::Ross => Ross.time_limit(round),
+        }
+    }
+
+    fn submission_kind(&self, round: u64) -> SubmissionKind {
+        match self {
+            Mode::Ross => Ross.submission_kind(round),
         }
     }
 
     fn prompt(&self, round: u64) -> &'static str {
         match self {
-            Game::Ross => Ross.prompt(round),
+            Mode::Ross => Ross.prompt(round),
         }
     }
 }
 
 pub trait GameLogic {
     fn last_round(&self) -> u64;
+    fn submission_kind(&self, round: u64) -> SubmissionKind;
     fn time_limit(&self, round: u64) -> Duration;
     fn prompt(&self, round: u64) -> &'static str;
 }

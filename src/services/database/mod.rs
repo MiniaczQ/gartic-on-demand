@@ -1,10 +1,10 @@
-pub mod images;
+pub mod assets;
 pub mod migrations;
 pub mod session;
 
 use std::ops::{Deref, DerefMut};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use surrealdb::{
     engine::any::{connect, Any},
     sql::{Id, Thing},
@@ -93,7 +93,7 @@ impl<T> IdConvert for Vec<RawRecord<T>> {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Record<T = ()> {
     pub id: u64,
     #[serde(flatten)]
@@ -130,3 +130,13 @@ pub enum DbError {
 }
 
 pub type DbResult<T> = Result<T, DbError>;
+
+pub trait MapToNotFound<T> {
+    fn found(self) -> DbResult<T>;
+}
+
+impl<T> MapToNotFound<T> for Option<T> {
+    fn found(self) -> DbResult<T> {
+        self.ok_or(DbError::NotFound)
+    }
+}

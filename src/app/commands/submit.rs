@@ -1,25 +1,21 @@
-use std::{borrow::Cow, ops::Add};
-
 use crate::app::{
     config::CONFIG,
     error::ConvertError,
     response::ResponseContext,
-    util::{display_started_round, extract_2x2_image, fetch_image_from_attachment},
+    util::{extract_2x2_image, fetch_image_from_attachment, image_to_attachment},
     AppContext, AppError,
 };
-use chrono::Utc;
 use poise::serenity_prelude::{Attachment, AttachmentType};
 use rossbot::services::{
-    database::{
-        images::{Image, ImageKind, ImageRepository},
-        session::{SessionRepository, UserSession},
-    },
+    database::session::SessionRepository,
     gamemodes::GameLogic,
-    image_processing::{concat_vertical, normalize_image, RgbaConvert},
+    image_processing::{concat_vertical, normalize_image_aoi, RgbaConvert},
     provider::Provider,
 };
+use std::borrow::Cow;
 use tracing::error;
 
+/// Submit an image to the current game session
 #[poise::command(slash_command, guild_only)]
 pub async fn submit(ctx: AppContext<'_>, attachment: Attachment) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);
@@ -38,16 +34,15 @@ pub async fn process(
     attachment: Attachment,
 ) -> Result<(), AppError> {
     let sr: SessionRepository = ctx.data().get();
-    let ir: ImageRepository = ctx.data().get();
-    let user_id = ctx.author().id;
+    let uid = ctx.author().id.0;
 
-    let session = sr
-        .remove_expiry(user_id)
+    let lobby = sr
+        .start_submitting(uid)
         .await
         .map_internal("Failed to find existing session")?;
 
-    let round = session.game.round();
-    let is_last = session.game.mode.last_round() == round;
+    let round = lobby.round();
+    let is_last = lobby.lobby.mode.last_round() == round;
 
     let image = fetch_image_from_attachment(&attachment)
         .await
@@ -55,8 +50,8 @@ pub async fn process(
 
     let (image, channel) = if is_last {
         let channel = CONFIG.channels.complete;
-        let attributes = extract_2x2_image(ctx, &session).await?;
-        let image = normalize_image(&image, 2 * CONFIG.image.width, 2 * CONFIG.image.height);
+        let attributes = extract_2x2_image(ctx, &lobby).await?;
+        let image = normalize_image_aoi(&image, 2 * CONFIG.image.width, 2 * CONFIG.image.height);
         let image = concat_vertical(&[attributes, image]);
         let image = AttachmentType::Bytes {
             data: Cow::Owned(image.to_png().to_vec()),
@@ -65,7 +60,7 @@ pub async fn process(
         (image, channel)
     } else {
         let channel = CONFIG.channels.partial;
-        let image = normalize_image(&image, CONFIG.image.width, CONFIG.image.height);
+        let image = normalize_image_aoi(&image, CONFIG.image.width, CONFIG.image.height);
         let image = AttachmentType::Bytes {
             data: Cow::Owned(image.to_png().to_vec()),
             filename: ctx.id().to_string() + ".png",
@@ -73,23 +68,12 @@ pub async fn process(
         (image, channel)
     };
     let message = channel
-        .send_message(ctx, |m| {
-            m.add_file(image).content(format!("<@{}>", user_id))
-        })
+        .send_message(ctx, |m| m.add_file(image).content(format!("<@{}>", uid)))
         .await?;
 
-    ir.create(message.id.0, Image::new(ImageKind::Submission, user_id))
+    sr.finish_submitting(uid, message.id.0)
         .await
-        .map_internal("Failed to add image to database")?;
-
-    sr.attach_image(user_id, message.id.0)
-        .await
-        .map_internal("Failed to attach image to game session")?;
-
-    let game = sr
-        .detach_user(user_id)
-        .await
-        .map_internal("Failed to remove user session")?;
+        .map_internal("Failed to attach image")?;
 
     rsx.respond(|f| f.content("Submited!")).await?;
     rsx.reset();
@@ -98,18 +82,17 @@ pub async fn process(
         rsx.respond(|b| b.content("This was the final round.\nUse `/start` to play again."))
             .await?;
     } else {
-        let next_round = game.round();
-        let user = UserSession {
-            user_id,
-            expires_at: Utc::now().add(game.mode.time_limit(next_round)),
-        };
-
-        let session = sr
-            .find_game_for_user(game.mode, next_round, user)
+        let next_round = lobby.round() + 1;
+        let lobby = sr
+            .find_attach(uid, lobby.lobby.mode, next_round)
             .await
             .map_user("No further rounds available currently.\nUse `/start` to play again.")?;
 
-        display_started_round(rsx, ctx, session).await?;
+        let image = extract_2x2_image(ctx, &lobby).await?;
+        let attachment = image_to_attachment(image);
+        rsx.purge().await?;
+        rsx.respond(|f| f.attachment(attachment).content(lobby.prompt_started()))
+            .await?;
     }
     Ok(())
 }
