@@ -1,12 +1,32 @@
-use std::{ops::Add, time::Duration};
-
 use super::{Database, DbResult, MapToNotFound};
-use crate::services::{gamemodes::Mode, provider::Provider};
+use crate::services::{
+    gamemodes::{GameLogic, Mode},
+    provider::Provider,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::ops::Add;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Active {
+    pub until: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Accepted {
+    pub when: DateTime<Utc>,
+    pub who: u64,
+    pub what: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Pending {
+    pub since: DateTime<Utc>,
+    pub what: u64,
+}
 
 /// Active -> Cancelled
 /// Active -> Expired
@@ -46,33 +66,86 @@ pub enum SessionState {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Session {
-    started_at: DateTime<Utc>,
-    state: SessionState,
+pub struct SessionWithRelations {
+    pub started_at: DateTime<Utc>,
+    pub state: SessionState,
     #[serde(rename = "in")]
-    u: User,
+    pub u: User,
     #[serde(rename = "out")]
-    m: Match,
+    pub m: Match,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Match {
-    mode: Mode,
+    pub mode: Mode,
 }
 
-pub struct SessionRepository {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MatchWithSessions<S> {
+    pub m: Match,
+    pub prev: Vec<Accepted>,
+    pub curr: S,
+}
+
+impl<S> MatchWithSessions<S> {
+    pub fn round(&self) -> u64 {
+        self.prev.len() as u64
+    }
+}
+
+impl MatchWithSessions<Active> {
+    pub fn prompt_started(&self) -> String {
+        let mode = self.m.mode;
+        let round = self.round();
+        format!(
+            "Started {:?} mode round {}.\n{}\nExpiring <t:{}:R>.\nUse `/submit` or `/cancel` to continue.",
+            mode,
+            round + 1,
+            mode.prompt(round),
+            self.curr.until.timestamp()
+        )
+    }
+
+    pub fn prompt_already_running(&self) -> String {
+        let mode = self.m.mode;
+        let round = self.round();
+        format!(
+            "{:?} mode round {} already running.\n{}\nExpiring <t:{}:R>.\nnUse `/submit` or `/cancel` to continue.",
+            mode,
+            round + 1,
+            mode.prompt(round),
+            self.curr.until.timestamp()
+        )
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PendingSession {
+    pub started_at: DateTime<Utc>,
+    pub state: Pending,
+    #[serde(rename = "in")]
+    pub u: User,
+    #[serde(rename = "out")]
+    pub m: Match,
+}
+
+pub struct SessionRepository2 {
     db: Database,
 }
 
-impl SessionRepository {
-    pub async fn get(&self, uid: u64) -> DbResult<Session> {
+impl SessionRepository2 {
+    pub async fn get(&self, uid: u64) -> DbResult<MatchWithSessions<Active>> {
         let query = r#"
-        SELECT * FROM sessions
+        SELECT
+        match AS m,
+        match<-(sessions WHERE state.type IS Accepted) AS prev,
+        match<-(sessions WHERE state.type IS Active) AS curr
+        FROM ONLY sessions
         WHERE u.id == $uid
         AND state.type = Active
         "#;
         let mut result = self.db.query(query).bind(("uid", uid)).await?;
-        result.take::<Option<Session>>(0)?.found()
+        result.take::<Option<_>>(0)?.found()
     }
 
     /// Active -> Expired
@@ -94,7 +167,7 @@ impl SessionRepository {
     }
 
     /// Active -> Uploading
-    pub async fn start_submitting(&self, uid: u64) -> DbResult<()> {
+    pub async fn start_submitting(&self, uid: u64) -> DbResult<MatchWithSessions<()>> {
         let now: DateTime<Utc> = Utc::now();
         let pending = SessionState::Uploading { since: now };
         let query = r#"
@@ -102,13 +175,17 @@ impl SessionRepository {
         WHERE u.id = $uid
         AND state.type = Active
         SET state = $pending
+        RETURN
+        match AS m,
+        match<-(sessions WHERE state.type IS Accepted) AS prev,
         "#;
-        self.db
+        let mut result = self
+            .db
             .query(query)
             .bind(("uid", uid))
             .bind(("pending", pending))
             .await?;
-        Ok(())
+        result.take::<Option<_>>(0)?.found()
     }
 
     /// TEMP: Uploading -> Accepted
@@ -158,9 +235,8 @@ impl SessionRepository {
         uid: u64,
         mode: Mode,
         round: u64,
-        time: Duration,
-    ) -> DbResult<Session> {
-        let until = Utc::now().add(time);
+    ) -> DbResult<MatchWithSessions<Active>> {
+        let until = Utc::now().add(mode.time_limit(round));
         let active = SessionState::Active { until };
         let query = r#"
         LET user = type::thing(users, $uid);
@@ -170,7 +246,10 @@ impl SessionRepository {
                     AND array::any(->(sessions WHERE state.type IN [Uploading, Pending])) IS false
                     AND array::len(->(sessions WHERE state.type = Accepted)) = $round
                     ORDER BY rand() LIMIT 1
-        RELATE ONLY $user->sessions->$match CONTENT $active;
+        RELATE ONLY $user->sessions->$match CONTENT $active RETURN
+        match AS m,
+        match<-(sessions WHERE state.type IS Accepted) AS prev,
+        match<-(sessions WHERE state.type IS Active) AS curr
         "#;
         let mut result = self
             .db
@@ -180,18 +259,21 @@ impl SessionRepository {
             .bind(("round", round))
             .bind(("active", active))
             .await?;
-        result.take::<Option<Session>>(0)?.found()
+        result.take::<Option<_>>(0)?.found()
     }
 
     /// -> Active
-    pub async fn create_attach(&self, uid: u64, mode: Mode, time: Duration) -> DbResult<Session> {
-        let until = Utc::now().add(time);
+    pub async fn create_attach(&self, uid: u64, mode: Mode) -> DbResult<MatchWithSessions<Active>> {
+        let until = Utc::now().add(mode.time_limit(0));
         let active = SessionState::Active { until };
         let match_ = Match { mode };
         let query = r#"
         LET user = type::thing(users, $uid);
         LET match = CREATE ONLY matches CONTENT $match;
-        RELATE ONLY $user->sessions->$match CONTENT $active;
+        RELATE ONLY $user->sessions->$match CONTENT $active RETURN
+        match AS m,
+        match<-(sessions WHERE state.type IS Accepted) AS prev,
+        match<-(sessions WHERE state.type IS Active) AS curr
         "#;
         let mut result = self
             .db
@@ -200,15 +282,15 @@ impl SessionRepository {
             .bind(("match", match_))
             .bind(("active", active))
             .await?;
-        result.take::<Option<Session>>(0)?.found()
+        result.take::<Option<_>>(0)?.found()
     }
 }
 
-impl<T> Provider<SessionRepository> for T
+impl<T> Provider<SessionRepository2> for T
 where
     T: Provider<Database>,
 {
-    fn get(&self) -> SessionRepository {
-        SessionRepository { db: self.get() }
+    fn get(&self) -> SessionRepository2 {
+        SessionRepository2 { db: self.get() }
     }
 }

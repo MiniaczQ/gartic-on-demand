@@ -1,7 +1,6 @@
 use super::{
     config::CONFIG,
     error::{AppError, ConvertError},
-    response::ResponseContext,
     AppContext,
 };
 use image::RgbaImage;
@@ -11,7 +10,7 @@ use reqwest::header::{self, HeaderValue};
 use rossbot::services::{
     database::{
         images::{AssetKind, ImageRepository},
-        session::Session,
+        sessionv2::MatchWithSessions,
     },
     image_processing::{concat_2_2, RgbaConvert},
     provider::Provider,
@@ -35,14 +34,14 @@ pub async fn fetch_image_from_attachment(attachment: &Attachment) -> Option<Rgba
     Some(image)
 }
 
-pub async fn extract_2x2_image(
+pub async fn extract_2x2_image<T>(
     ctx: AppContext<'_>,
-    session: &Session,
+    match_: &MatchWithSessions<T>,
 ) -> Result<RgbaImage, AppError> {
     let ar: ImageRepository = ctx.data().get();
     let mut images = Vec::with_capacity(4);
-    for image in session.game.images.iter() {
-        let image = fetch_image_from_channel(ctx, CONFIG.channels.partial, *image).await?;
+    for what in match_.prev.iter().map(|a| a.what) {
+        let image = fetch_image_from_channel(ctx, CONFIG.channels.partial, what).await?;
         images.push(image);
     }
     if images.len() < 4 {
@@ -87,33 +86,4 @@ async fn fetch_image_from_channel(
         .await
         .unwrap();
     Ok(image)
-}
-
-pub async fn display_started_round(
-    rsx: &mut ResponseContext<'_>,
-    ctx: AppContext<'_>,
-    session: Session,
-) -> Result<(), AppError> {
-    let image = extract_2x2_image(ctx, &session).await?;
-    let attachment = image_to_attachment(image);
-    rsx.purge().await?;
-    rsx.respond(|f| f.attachment(attachment).content(session.prompt_started()))
-        .await?;
-    Ok(())
-}
-
-pub async fn display_already_running_round(
-    rsx: &mut ResponseContext<'_>,
-    ctx: AppContext<'_>,
-    session: Session,
-) -> Result<(), AppError> {
-    let image = extract_2x2_image(ctx, &session).await?;
-    let attachment = image_to_attachment(image);
-    rsx.purge().await?;
-    rsx.respond(|f| {
-        f.attachment(attachment)
-            .content(session.prompt_already_running())
-    })
-    .await?;
-    Ok(())
 }

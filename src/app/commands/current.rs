@@ -1,8 +1,10 @@
 use crate::app::{
-    error::ConvertError, response::ResponseContext, util::display_already_running_round,
+    error::ConvertError,
+    response::ResponseContext,
+    util::{extract_2x2_image, image_to_attachment},
     AppContext, AppError,
 };
-use rossbot::services::{database::session::SessionRepository, provider::Provider};
+use rossbot::services::{database::sessionv2::SessionRepository2, provider::Provider};
 use tracing::error;
 
 #[poise::command(slash_command, guild_only)]
@@ -18,12 +20,16 @@ pub async fn current(ctx: AppContext<'_>) -> Result<(), AppError> {
 }
 
 pub async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
-    let sr: SessionRepository = ctx.data().get();
-    let user_id = ctx.author().id;
-    let session = sr
-        .get_current_user_game(user_id)
-        .await
-        .map_user("No current game")?;
-    display_already_running_round(rsx, ctx, session).await?;
+    let sr: SessionRepository2 = ctx.data().get();
+    let uid = ctx.author().id.0;
+    let match_ = sr.get(uid).await.map_user("No current game")?;
+    let image = extract_2x2_image(ctx, &match_).await?;
+    let attachment = image_to_attachment(image);
+    rsx.purge().await?;
+    rsx.respond(|f| {
+        f.attachment(attachment)
+            .content(match_.prompt_already_running())
+    })
+    .await?;
     Ok(())
 }
