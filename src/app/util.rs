@@ -3,6 +3,7 @@ use super::{
     error::{AppError, ConvertError},
     AppContext,
 };
+use bytes::Bytes;
 use image::RgbaImage;
 use mime::IMAGE_PNG;
 use poise::serenity_prelude::{Attachment, AttachmentType, ChannelId, MessageId};
@@ -16,7 +17,7 @@ use rossbot::services::{
     provider::Provider,
 };
 
-pub async fn fetch_image_from_attachment(attachment: &Attachment) -> Option<RgbaImage> {
+pub async fn fetch_raw_image_from_attachment(attachment: &Attachment) -> Option<Bytes> {
     if attachment.content_type.as_deref() != Some(IMAGE_PNG.essence_str()) {
         return None;
     }
@@ -30,6 +31,11 @@ pub async fn fetch_image_from_attachment(attachment: &Attachment) -> Option<Rgba
         return None;
     }
     let bytes = data.bytes().await.unwrap();
+    Some(bytes)
+}
+
+pub async fn fetch_image_from_attachment(attachment: &Attachment) -> Option<RgbaImage> {
+    let bytes = fetch_raw_image_from_attachment(attachment).await?;
     let image = RgbaImage::from_png(&bytes);
     Some(image)
 }
@@ -69,11 +75,15 @@ pub async fn extract_2x2_image<T>(
     Ok(image)
 }
 
-pub fn image_to_attachment<'a>(image: RgbaImage) -> AttachmentType<'a> {
+pub fn raw_image_to_attachment<'a>(bytes: Vec<u8>) -> AttachmentType<'a> {
     AttachmentType::Bytes {
-        data: std::borrow::Cow::Owned(image.to_png()),
+        data: std::borrow::Cow::Owned(bytes),
         filename: "image.png".to_owned(),
     }
+}
+
+pub fn image_to_attachment<'a>(image: RgbaImage) -> AttachmentType<'a> {
+    raw_image_to_attachment(image.to_png())
 }
 
 pub async fn fetch_image_from_channel(

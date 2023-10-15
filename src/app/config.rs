@@ -40,6 +40,9 @@ pub struct Channels {
     pub moderation: ChannelId,
     pub partial: ChannelId,
     pub complete: ChannelId,
+    pub partial_nsfw: ChannelId,
+    pub complete_nsfw: ChannelId,
+    pub rejects: ChannelId,
     pub stats: ChannelId,
 }
 
@@ -47,14 +50,15 @@ pub struct Channels {
 pub struct Roles {
     pub admin: RoleId,
     pub moderator: RoleId,
+    pub trusted: RoleId,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Reactions {
-    pub accept: char,
-    pub reject: char,
-    pub reroll: char,
-    pub delete: char,
+    pub accept: String,
+    pub reject: String,
+    pub reroll: String,
+    pub delete: String,
 }
 
 #[derive(Debug, Deserialize)]

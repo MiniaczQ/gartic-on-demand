@@ -20,7 +20,7 @@ pub async fn current(ctx: AppContext<'_>) -> Result<(), AppError> {
     Ok(())
 }
 
-pub async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
+async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
     let sr: SessionRepository = ctx.data().get();
     let uid = ctx.author().id.0;
     sr.stop_expired()

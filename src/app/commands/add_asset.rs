@@ -1,8 +1,8 @@
 use crate::app::{
-    config::CONFIG, error::ConvertError, response::ResponseContext,
+    config::CONFIG, error::ConvertError, permission::has_admin, response::ResponseContext,
     util::fetch_image_from_attachment, AppContext, AppError,
 };
-use poise::serenity_prelude::{Attachment, AttachmentType, ChannelId};
+use poise::serenity_prelude::{Attachment, AttachmentType, ChannelId, ReactionType};
 use rossbot::services::{
     database::assets::{Asset, AssetKind, ImageRepository},
     image_processing::{normalize_image, RgbaConvert},
@@ -34,13 +34,14 @@ pub async fn add_asset(
     Ok(())
 }
 
-pub async fn process(
+async fn process(
     rcx: &mut ResponseContext<'_>,
     ctx: AppContext<'_>,
     attachment: Attachment,
     kind: AssetKindArg,
 ) -> Result<(), AppError> {
-    let kind: AssetKind = kind.into();
+    let user = ctx.author();
+    has_admin(&ctx, user).await?;
 
     let image = fetch_image_from_attachment(&attachment)
         .await
@@ -51,13 +52,12 @@ pub async fn process(
         filename: ctx.id().to_string() + ".png",
     };
 
-    let user = ctx.author();
-
+    let kind: AssetKind = kind.into();
     let message = kind_to_channel(kind)
         .send_message(ctx, |m| {
             m.add_file(image)
                 .content(format!("<@{}>", user.id))
-                .reactions([CONFIG.reactions.delete])
+                .reactions([ReactionType::Unicode(CONFIG.reactions.delete.clone())])
         })
         .await?;
 

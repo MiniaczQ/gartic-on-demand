@@ -4,7 +4,7 @@ use app::{
     commands,
     config::CONFIG,
     error::AppError,
-    handlers::{remove_asset::RemoveAsset, AssetHandler},
+    handlers::{accept_submission::AcceptSubmission, remove_asset::RemoveAsset, AssetHandler},
     stats_printer::StatsPrinter,
     AppData,
 };
@@ -12,6 +12,7 @@ use poise::{serenity_prelude::Ready, Event, Framework, FrameworkContext};
 use serenity::prelude::{Context, GatewayIntents};
 use std::{future::Future, pin::Pin};
 use tokio::spawn;
+use tracing::error;
 
 async fn on_error(error: poise::FrameworkError<'_, AppData, AppError>) {
     match error {
@@ -59,18 +60,24 @@ async fn main() {
         .unwrap();
 }
 
-fn event_handler(
+fn event_handler<'a>(
     ctx: &Context,
-    event: &Event<'_>,
-    fcx: FrameworkContext<'_, AppData, AppError>,
+    event: &Event<'a>,
+    fcx: FrameworkContext<'a, AppData, AppError>,
     data: &AppData,
-) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send>> {
-    for handler in [RemoveAsset] {
-        if let Some(handled) = handler.handle(ctx, event, fcx, data) {
-            return handled;
+) -> Pin<Box<dyn Future<Output = Result<(), AppError>> + Send + 'a>> {
+    let ctx = ctx.clone();
+    let event = event.clone();
+    let data = data.clone();
+    Box::pin(async move {
+        let handlers: &[&dyn AssetHandler] = &[&RemoveAsset, &AcceptSubmission];
+        for handler in handlers {
+            if let Err(e) = handler.handle(&ctx, &event, fcx, &data).await {
+                error!(error = %e, handler = ?handler, "Error in handler");
+            }
         }
-    }
-    Box::pin(async { Ok(()) })
+        Ok(())
+    })
 }
 
 fn options() -> poise::FrameworkOptions<AppData, AppError> {
@@ -84,6 +91,7 @@ fn options() -> poise::FrameworkOptions<AppData, AppError> {
             commands::current::current(),
             commands::incomplete_games::incomplete_games(),
             commands::random_attributes::random_attributes(),
+            commands::purge::purge(),
         ],
         on_error: |error| Box::pin(on_error(error)),
         event_handler,

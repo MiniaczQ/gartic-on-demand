@@ -1,29 +1,44 @@
+use crate::app::{config::CONFIG, permission::has_admin};
+
 use super::{AppData, AppError, AssetHandler};
+use async_trait::async_trait;
 use poise::{Event, FrameworkContext};
 use rossbot::services::{database::assets::ImageRepository, provider::Provider};
 use serenity::prelude::Context;
-use std::{future::Future, pin::Pin};
+use std::cmp::Ordering;
 use tracing::error;
 
+#[derive(Debug)]
 pub struct RemoveAsset;
 
+#[async_trait]
 impl AssetHandler for RemoveAsset {
-    fn handle(
+    async fn handle<'a>(
         &self,
         ctx: &Context,
-        event: &Event<'_>,
-        _fcx: FrameworkContext<'_, AppData, AppError>,
+        event: &Event<'a>,
+        _fcx: FrameworkContext<'a, AppData, AppError>,
         data: &AppData,
-    ) -> Option<Pin<Box<dyn Future<Output = Result<(), AppError>> + Send>>> {
-        let ctx = ctx.clone();
+    ) -> Result<(), AppError> {
         let ir: ImageRepository = data.get();
-        let event = event.clone();
+        let channels = [CONFIG.channels.draw_this, CONFIG.channels.in_contruction];
         match event {
-            Event::ReactionAdd { add_reaction } => Some(Box::pin(async move {
+            Event::ReactionAdd { add_reaction } => {
                 let user = add_reaction.user(&ctx).await?;
+                if !channels.contains(&add_reaction.channel_id) {
+                    return Ok(());
+                }
                 if user.bot {
                     return Ok(());
                 }
+                if add_reaction
+                    .emoji
+                    .unicode_partial_cmp(&CONFIG.reactions.delete)
+                    != Some(Ordering::Equal)
+                {
+                    return Ok(());
+                }
+                has_admin(&ctx, &user).await?;
                 let result = ir.delete(add_reaction.message_id.0).await;
                 match result {
                     Ok(_) => {
@@ -37,8 +52,8 @@ impl AssetHandler for RemoveAsset {
                 }
 
                 Ok(())
-            })),
-            _ => None,
+            }
+            _ => Ok(()),
         }
     }
 }

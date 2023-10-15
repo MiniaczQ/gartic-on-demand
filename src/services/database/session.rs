@@ -27,16 +27,22 @@ pub struct Accepted {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Uploading {
-    since: DateTime<Utc>,
+    pub since: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Pending {
+    pub since: DateTime<Utc>,
+    pub what: u64,
 }
 
 /// Active -> Cancelled
 /// Active -> Expired
 /// Active -> Uploading
-/// TEMP: Uploading -> Accepted
-/// SOON: Uploading -> Pending
-/// SOON: Pending -> Accepted
-/// SOON: Pending -> Rejected
+/// Uploading -> Accepted
+/// Uploading -> Pending
+/// Pending -> Accepted
+/// Pending -> Rejected
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum SessionState {
@@ -64,6 +70,7 @@ pub enum SessionState {
     Rejected {
         when: DateTime<Utc>,
         who: u64,
+        what: u64,
     },
 }
 
@@ -172,6 +179,17 @@ impl SessionRepository {
         result.take::<Option<_>>(1)?.found()
     }
 
+    pub async fn get_pending(&self, aid: u64) -> DbResult<TypedSession<Pending>> {
+        info!(aid = aid, "Get submission");
+        let query = r#"
+        SELECT * FROM sessions
+            WHERE state.what = $aid
+            AND state.type = "Pending"
+        "#;
+        let mut result = self.db.query(query).bind(("aid", aid)).await?;
+        result.take::<Option<_>>(0)?.found()
+    }
+
     /// Active -> Expired
     pub async fn stop_expired(&self) -> DbResult<()> {
         let now = Utc::now();
@@ -222,9 +240,9 @@ impl SessionRepository {
         result.take::<Option<_>>(1)?.found()
     }
 
-    /// TEMP: Uploading -> Accepted
-    pub async fn finish_submitting(&self, uid: u64, aid: u64) -> DbResult<()> {
-        info!(uid = uid, aid = aid, "Finish submitting");
+    /// Uploading -> Accepted
+    pub async fn finish_submitting_trusted(&self, uid: u64, aid: u64) -> DbResult<()> {
+        info!(uid = uid, aid = aid, "Finish submitting trusted");
         let now: DateTime<Utc> = Utc::now();
         let accepted = SessionState::Accepted {
             when: now,
@@ -240,6 +258,79 @@ impl SessionRepository {
         self.db
             .query(query)
             .bind(("uid", uid))
+            .bind(("accepted", accepted))
+            .await?;
+        Ok(())
+    }
+
+    /// Uploading -> Pending
+    pub async fn finish_submitting_untrusted(&self, uid: u64, aid: u64) -> DbResult<()> {
+        info!(uid = uid, aid = aid, "Finish submitting untrusted");
+        let now: DateTime<Utc> = Utc::now();
+        let pending = SessionState::Pending {
+            since: now,
+            what: aid,
+        };
+        let query = r#"
+        UPDATE sessions
+            SET state = $pending
+            WHERE meta::id(in) = $uid
+            AND state.type IS "Uploading"
+        "#;
+        self.db
+            .query(query)
+            .bind(("uid", uid))
+            .bind(("pending", pending))
+            .await?;
+        Ok(())
+    }
+
+    /// Pending -> Accepted
+    pub async fn accept_pending(&self, uid: u64, old_aid: u64, new_aid: u64) -> DbResult<()> {
+        info!(
+            uid = uid,
+            old_aid = old_aid,
+            new_aid = new_aid,
+            "Accept pending"
+        );
+        let now: DateTime<Utc> = Utc::now();
+        let accepted = SessionState::Accepted {
+            when: now,
+            who: uid,
+            what: new_aid,
+        };
+        let query = r#"
+        UPDATE sessions
+            SET state = $accepted
+            WHERE state.what = $old_aid
+            AND state.type IS "Pending"
+        "#;
+        self.db
+            .query(query)
+            .bind(("old_aid", old_aid))
+            .bind(("accepted", accepted))
+            .await?;
+        Ok(())
+    }
+
+    /// Pending -> Rejected
+    pub async fn reject_pending(&self, uid: u64, old_aid: u64, new_aid: u64) -> DbResult<()> {
+        info!(uid = uid, old_aid = old_aid, "Reject pending");
+        let now: DateTime<Utc> = Utc::now();
+        let accepted = SessionState::Rejected {
+            when: now,
+            who: uid,
+            what: new_aid,
+        };
+        let query = r#"
+        UPDATE sessions
+            SET state = $accepted
+            WHERE state.what = $old_aid
+            AND state.type IS "Pending"
+        "#;
+        self.db
+            .query(query)
+            .bind(("old_aid", old_aid))
             .bind(("accepted", accepted))
             .await?;
         Ok(())
@@ -435,7 +526,7 @@ pub struct IncompleteGames {
 impl Display for IncompleteGames {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!(
-            "{:?} mode round {} available: {}",
+            "{:?} mode - round {} - available {}",
             self.mode,
             self.round + 1,
             self.count

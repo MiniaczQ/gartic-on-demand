@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use chrono::Utc;
 use rossbot::services::{
     database::{session::SessionRepository, Database},
     provider::Provider,
@@ -41,7 +42,7 @@ impl StatsPrinter {
             message.delete(&self.ctx).await?;
         }
         let mut message = channel
-            .send_message(&self.ctx, |b| b.content("Processing..."))
+            .send_message(&self.ctx, |b| b.embed(|b| b.description("Setting up...")))
             .await?;
 
         loop {
@@ -51,7 +52,7 @@ impl StatsPrinter {
                 .await
                 .map_internal("Failed to stop expired sessions")?;
 
-            let active = self
+            let mut active = self
                 .sr
                 .active_users()
                 .await
@@ -61,7 +62,11 @@ impl StatsPrinter {
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let incomplete = self
+            if active.is_empty() {
+                active.push_str("None");
+            }
+
+            let mut incomplete = self
                 .sr
                 .incomplete_games()
                 .await
@@ -71,11 +76,22 @@ impl StatsPrinter {
                 .collect::<Vec<_>>()
                 .join("\n");
 
+            if incomplete.is_empty() {
+                incomplete.push_str("None");
+            }
+
             let response = format!(
-                "Active users: {}\nIncomplete games:\n{}",
+                "**Active users:**\n{}\n\n**Incomplete games:**\n{}",
                 active, incomplete
             );
-            message.edit(&self.ctx, |b| b.content(response)).await?;
+            message
+                .edit(&self.ctx, |b| {
+                    b.embed(|b| {
+                        b.title(format!("Status update <t:{}>", Utc::now().timestamp()))
+                            .description(response)
+                    })
+                })
+                .await?;
             ticker.tick().await;
         }
     }
