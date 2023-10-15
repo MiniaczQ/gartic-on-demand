@@ -1,28 +1,29 @@
 use crate::app::{config::CONFIG, permission::has_admin};
 
 use super::{AppData, AppError, AssetHandler};
+use async_trait::async_trait;
 use poise::{Event, FrameworkContext};
 use rossbot::services::{database::assets::ImageRepository, provider::Provider};
 use serenity::prelude::Context;
-use std::{cmp::Ordering, future::Future, pin::Pin};
+use std::cmp::Ordering;
 use tracing::error;
 
+#[derive(Debug)]
 pub struct RemoveAsset;
 
+#[async_trait]
 impl AssetHandler for RemoveAsset {
-    fn handle(
+    async fn handle<'a>(
         &self,
         ctx: &Context,
-        event: &Event<'_>,
-        _fcx: FrameworkContext<'_, AppData, AppError>,
+        event: &Event<'a>,
+        _fcx: FrameworkContext<'a, AppData, AppError>,
         data: &AppData,
-    ) -> Option<Pin<Box<dyn Future<Output = Result<(), AppError>> + Send>>> {
-        let ctx = ctx.clone();
+    ) -> Result<(), AppError> {
         let ir: ImageRepository = data.get();
-        let event = event.clone();
         let channels = [CONFIG.channels.draw_this, CONFIG.channels.in_contruction];
         match event {
-            Event::ReactionAdd { add_reaction } => Some(Box::pin(async move {
+            Event::ReactionAdd { add_reaction } => {
                 let user = add_reaction.user(&ctx).await?;
                 if !channels.contains(&add_reaction.channel_id) {
                     return Ok(());
@@ -51,8 +52,8 @@ impl AssetHandler for RemoveAsset {
                 }
 
                 Ok(())
-            })),
-            _ => None,
+            }
+            _ => Ok(()),
         }
     }
 }

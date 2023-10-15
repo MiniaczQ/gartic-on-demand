@@ -2,18 +2,18 @@ pub mod accept_submission;
 pub mod remove_asset;
 
 use super::{AppData, AppError};
+use async_trait::async_trait;
 use poise::{Event, FrameworkContext};
 use serenity::prelude::Context;
-use std::{future::Future, pin::Pin};
+use std::fmt::Debug;
 
-type AppFuture = Pin<Box<dyn Future<Output = Result<(), AppError>> + Send>>;
-
-pub trait AssetHandler {
-    fn handle(
+#[async_trait]
+pub trait AssetHandler: Debug + Sync + Send + 'static {
+    async fn handle<'a>(
         &self,
         ctx: &Context,
-        event: &Event<'_>,
-        _fcx: FrameworkContext<'_, AppData, AppError>,
+        event: &Event<'a>,
+        _fcx: FrameworkContext<'a, AppData, AppError>,
         data: &AppData,
-    ) -> Option<AppFuture>;
+    ) -> Result<(), AppError>;
 }

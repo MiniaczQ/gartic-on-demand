@@ -18,6 +18,7 @@ pub mod response;
 pub mod stats_printer;
 pub mod util;
 
+#[derive(Clone)]
 pub struct AppData {
     pub db: Database,
 }

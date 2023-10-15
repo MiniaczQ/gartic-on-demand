@@ -5,29 +5,30 @@ use crate::app::{
     permission::has_mod,
     util::{fetch_raw_image_from_attachment, raw_image_to_attachment},
 };
+use async_trait::async_trait;
 use poise::{Event, FrameworkContext};
 use rossbot::services::{
     database::session::{SessionRepository, SubmissionKind},
     provider::Provider,
 };
 use serenity::prelude::Context;
-use std::{cmp::Ordering, future::Future, pin::Pin};
+use std::cmp::Ordering;
 
-pub struct RemoveAsset;
+#[derive(Debug)]
+pub struct AcceptSubmission;
 
-impl AssetHandler for RemoveAsset {
-    fn handle(
+#[async_trait]
+impl AssetHandler for AcceptSubmission {
+    async fn handle<'a>(
         &self,
         ctx: &Context,
-        event: &Event<'_>,
-        _fcx: FrameworkContext<'_, AppData, AppError>,
+        event: &Event<'a>,
+        _fcx: FrameworkContext<'a, AppData, AppError>,
         data: &AppData,
-    ) -> Option<Pin<Box<dyn Future<Output = Result<(), AppError>> + Send>>> {
-        let ctx = ctx.clone();
+    ) -> Result<(), AppError> {
         let sr: SessionRepository = data.get();
-        let event = event.clone();
         match event {
-            Event::ReactionAdd { add_reaction } => Some(Box::pin(async move {
+            Event::ReactionAdd { add_reaction } => {
                 let user = add_reaction.user(&ctx).await?;
                 if add_reaction.channel_id != CONFIG.channels.moderation {
                     return Ok(());
@@ -65,8 +66,8 @@ impl AssetHandler for RemoveAsset {
                     (false, _) => CONFIG.channels.rejects,
                 };
 
-                let message = add_reaction.message(&ctx).await?;
-                let raw_image = fetch_raw_image_from_attachment(&message.attachments[0])
+                let old_message = add_reaction.message(&ctx).await?;
+                let raw_image = fetch_raw_image_from_attachment(&old_message.attachments[0])
                     .await
                     .ok_or(AppError::internal(
                         OptionEmptyError,
@@ -74,21 +75,25 @@ impl AssetHandler for RemoveAsset {
                     ))?;
 
                 let attachment = raw_image_to_attachment(raw_image.into());
-                let message = channel
-                    .send_message(ctx, |m| m.add_file(attachment).content(message.content))
+                let new_message = channel
+                    .send_message(ctx, |m| {
+                        m.add_file(attachment).content(&old_message.content)
+                    })
                     .await?;
 
                 let uid = user.id.0;
-                let new_aid = message.id.0;
+                let new_aid = new_message.id.0;
                 match accepted {
                     true => sr.accept_pending(uid, old_aid, new_aid).await,
                     false => sr.reject_pending(uid, old_aid, new_aid).await,
                 }
                 .map_internal("Failed to accept/reject session")?;
 
+                old_message.delete(&ctx).await?;
+
                 Ok(())
-            })),
-            _ => None,
+            }
+            _ => Ok(()),
         }
     }
 }

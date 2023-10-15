@@ -6,7 +6,7 @@ use crate::app::{
     util::{extract_2x2_image, fetch_image_from_attachment, image_to_attachment},
     AppContext, AppError,
 };
-use poise::serenity_prelude::{Attachment, AttachmentType};
+use poise::serenity_prelude::{Attachment, AttachmentType, ReactionType};
 use rossbot::services::{
     database::session::{SessionRepository, SubmissionKind},
     gamemodes::GameLogic,
@@ -74,13 +74,20 @@ pub async fn process(
         }
     };
 
-    let message = channel
-        .send_message(ctx, |m| m.add_file(image).content(format!("<@{}>", uid)))
-        .await?;
-
     if trusted {
+        let message = channel
+            .send_message(ctx, |m| m.add_file(image).content(format!("<@{}>", uid)))
+            .await?;
         sr.finish_submitting_trusted(uid, message.id.0).await
     } else {
+        let message = channel
+            .send_message(ctx, |m| {
+                m.add_file(image).content(format!("<@{}>", uid)).reactions([
+                    ReactionType::Unicode(CONFIG.reactions.accept.clone()),
+                    ReactionType::Unicode(CONFIG.reactions.reject.clone()),
+                ])
+            })
+            .await?;
         sr.finish_submitting_untrusted(uid, message.id.0).await
     }
     .map_internal("Failed to attach image")?;

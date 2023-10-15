@@ -182,12 +182,12 @@ impl SessionRepository {
     pub async fn get_pending(&self, aid: u64) -> DbResult<TypedSession<Pending>> {
         info!(aid = aid, "Get submission");
         let query = r#"
-        SELECT * FROM ONLY sessions
+        SELECT * FROM sessions
             WHERE state.what = $aid
             AND state.type = "Pending"
         "#;
         let mut result = self.db.query(query).bind(("aid", aid)).await?;
-        result.take::<Option<_>>(1)?.found()
+        result.take::<Option<_>>(0)?.found()
     }
 
     /// Active -> Expired
@@ -526,7 +526,7 @@ pub struct IncompleteGames {
 impl Display for IncompleteGames {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!(
-            "{:?} mode round {} available: {}",
+            "{:?} mode - round {} - available {}",
             self.mode,
             self.round + 1,
             self.count
