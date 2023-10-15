@@ -13,6 +13,7 @@ pub mod config;
 pub mod error;
 pub mod handlers;
 pub mod log;
+pub mod permission;
 pub mod response;
 pub mod stats_printer;
 pub mod util;

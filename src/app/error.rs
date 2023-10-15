@@ -54,6 +54,6 @@ impl<T> ConvertError<T> for Option<T> {
     }
 
     fn map_internal(self, msg: &'static str) -> Result<T, AppError> {
-        self.ok_or(AppError::user(OptionEmptyError, msg))
+        self.ok_or(AppError::internal(OptionEmptyError, msg))
     }
 }

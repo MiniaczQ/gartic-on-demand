@@ -1,3 +1,4 @@
+pub mod accept_submission;
 pub mod remove_asset;
 
 use super::{AppData, AppError};
