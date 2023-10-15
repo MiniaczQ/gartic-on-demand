@@ -23,7 +23,7 @@ pub async fn random_attributes(ctx: AppContext<'_>) -> Result<(), AppError> {
     Ok(())
 }
 
-pub async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
+async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
     let sr: SessionRepository = ctx.data().get();
     let count = 4;
     let ids = sr

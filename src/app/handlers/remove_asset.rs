@@ -34,7 +34,7 @@ impl AssetHandler for RemoveAsset {
                 if add_reaction
                     .emoji
                     .unicode_partial_cmp(&CONFIG.reactions.delete)
-                    == Some(Ordering::Equal)
+                    != Some(Ordering::Equal)
                 {
                     return Ok(());
                 }

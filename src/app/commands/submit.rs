@@ -29,7 +29,7 @@ pub async fn submit(ctx: AppContext<'_>, attachment: Attachment) -> Result<(), A
     Ok(())
 }
 
-pub async fn process(
+async fn process(
     rsx: &mut ResponseContext<'_>,
     ctx: AppContext<'_>,
     attachment: Attachment,

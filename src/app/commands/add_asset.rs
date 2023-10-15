@@ -34,7 +34,7 @@ pub async fn add_asset(
     Ok(())
 }
 
-pub async fn process(
+async fn process(
     rcx: &mut ResponseContext<'_>,
     ctx: AppContext<'_>,
     attachment: Attachment,

@@ -15,7 +15,7 @@ pub async fn cancel(ctx: AppContext<'_>) -> Result<(), AppError> {
     Ok(())
 }
 
-pub async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
+async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
     let sr: SessionRepository = ctx.data().get();
     let uid = ctx.author().id.0;
     sr.cancel(uid).await.map_user("No previous session")?;
