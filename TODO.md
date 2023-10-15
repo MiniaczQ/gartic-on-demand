@@ -1,0 +1,4 @@
+- Clean up image extraction, processing and embeding API (helper traits?)
+- Clean up game session display (deduplicate) - start, submit, reroll, current
+- Clean up shared or soon to be shared logic elements - start, submit, reroll
+- 
