@@ -1,4 +1,6 @@
-use crate::app::{error::ConvertError, response::ResponseContext, AppContext, AppError};
+use crate::app::{
+    error::ConvertError, response::ResponseContext, util::show_round, AppContext, AppError,
+};
 use chrono::Utc;
 use rossbot::services::{
     database::session::SessionRepository, gamemodes::GameLogic, provider::Provider,
@@ -26,7 +28,6 @@ async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(
     sr.extend(uid, until)
         .await
         .map_internal("Failed to extend timer")?;
-    rsx.respond(|b| b.content(format!("Session will expire <:{}:R>", until.timestamp())))
-        .await?;
+    show_round(rsx, &ctx, &lobby, true).await?;
     Ok(())
 }

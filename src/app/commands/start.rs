@@ -27,12 +27,12 @@ pub enum GameArg {
 pub async fn start(
     ctx: AppContext<'_>,
     mode: GameArg,
-    #[min = 1] round: Option<u64>,
+    //#[min = 1] round: Option<u64>,
     nsfw: Option<bool>,
 ) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);
     rsx.init().await?;
-    if let Err(e) = process(&mut rsx, ctx, mode, round, nsfw).await {
+    if let Err(e) = process(&mut rsx, ctx, mode, Some(1), nsfw).await {
         error!(error = ?e);
         rsx.respond(|b| b.content(e.for_user())).await?
     }
