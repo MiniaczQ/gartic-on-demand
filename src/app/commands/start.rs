@@ -1,5 +1,6 @@
 use crate::app::{
     error::{AppError, ConvertError},
+    permission::is_adult,
     response::ResponseContext,
     util::show_round,
     AppContext,
@@ -27,10 +28,11 @@ pub async fn start(
     ctx: AppContext<'_>,
     mode: GameArg,
     #[min = 1] round: Option<u64>,
+    nsfw: Option<bool>,
 ) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);
     rsx.init().await?;
-    if let Err(e) = process(&mut rsx, ctx, mode, round).await {
+    if let Err(e) = process(&mut rsx, ctx, mode, round, nsfw).await {
         error!(error = ?e);
         rsx.respond(|b| b.content(e.for_user())).await?
     }
@@ -43,13 +45,23 @@ async fn process(
     ctx: AppContext<'_>,
     mode: GameArg,
     round: Option<u64>,
+    nsfw: Option<bool>,
 ) -> Result<(), AppError> {
     let sr: SessionRepository = ctx.data().get();
-    let author = ctx.author();
-    let uid = author.id.0;
+    let user = ctx.author();
+    let uid = user.id.0;
     let round = round.unwrap_or(1).sub(1);
+    let nsfw = nsfw.unwrap_or(false);
 
-    sr.ensure_user(uid, &author.name)
+    if nsfw {
+        if !is_adult(&ctx, &user).await? {
+            rsx.respond(|b| b.content("You need the `+18` role to participate in NSFW games."))
+                .await?;
+            return Ok(());
+        }
+    }
+
+    sr.ensure_user(uid, &user.name)
         .await
         .map_internal("Failed to create user")?;
 
@@ -64,7 +76,7 @@ async fn process(
         return show_round(rsx, &ctx, &lobby, true).await;
     }
 
-    let lobby = find_or_create_session(sr, uid, mode, round).await?;
+    let lobby = find_or_create_session(sr, uid, mode, round, nsfw).await?;
     show_round(rsx, &ctx, &lobby, false).await?;
     let waker: StatusUpdateWaker = ctx.data().get();
     waker.wake();
@@ -76,6 +88,7 @@ async fn find_or_create_session(
     uid: u64,
     mode: GameArg,
     round: u64,
+    nsfw: bool,
 ) -> Result<LobbyWithSessions<Active>, AppError> {
     let mode = map_game(mode);
 
@@ -87,7 +100,7 @@ async fn find_or_create_session(
     let lobby = match (maybe_lobby, round) {
         (Ok(lobby), _) => lobby,
         (Err(DbError::NotFound), 0) => sr
-            .create_attach(uid, mode)
+            .create_attach(uid, mode, nsfw)
             .await
             .map_internal("Failed to create game session")?,
         (e, _) => e.map_user("Did not find pending sessions")?,

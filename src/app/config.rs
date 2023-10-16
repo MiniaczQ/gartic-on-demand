@@ -51,6 +51,7 @@ pub struct Roles {
     pub admin: RoleId,
     pub moderator: RoleId,
     pub trusted: RoleId,
+    pub adult: RoleId,
 }
 
 #[derive(Debug, Deserialize)]

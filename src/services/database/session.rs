@@ -100,6 +100,7 @@ pub struct TypedSession<T> {
 pub struct Lobby {
     pub created_at: DateTime<Utc>,
     pub mode: Mode,
+    pub nsfw: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -417,7 +418,12 @@ impl SessionRepository {
     }
 
     /// -> Active
-    pub async fn create_attach(&self, uid: u64, mode: Mode) -> DbResult<LobbyWithSessions<Active>> {
+    pub async fn create_attach(
+        &self,
+        uid: u64,
+        mode: Mode,
+        nsfw: bool,
+    ) -> DbResult<LobbyWithSessions<Active>> {
         info!(uid = uid, mode = ?mode, "Create attach");
         let now = Utc::now();
         let round = 0;
@@ -433,6 +439,7 @@ impl SessionRepository {
         let lobby = Lobby {
             mode,
             created_at: now,
+            nsfw,
         };
         let query = r#"
         LET $user = type::thing("users", $uid);

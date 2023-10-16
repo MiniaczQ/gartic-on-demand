@@ -6,6 +6,13 @@ use super::{
     error::{AppError, OptionEmptyError},
 };
 
+pub async fn is_adult(cache_http: impl CacheHttp, user: &User) -> serenity::Result<bool> {
+    let is_trusted: bool = user
+        .has_role(&cache_http, CONFIG.guild, CONFIG.roles.adult)
+        .await?;
+    Ok(is_trusted)
+}
+
 pub async fn is_trusted(cache_http: impl CacheHttp, user: &User) -> serenity::Result<bool> {
     let is_trusted: bool = user
         .has_role(&cache_http, CONFIG.guild, CONFIG.roles.trusted)
