@@ -125,9 +125,11 @@ impl LobbyWithSessions<Active> {
         } else {
             ""
         };
+        let sfw = if self.lobby.nsfw { "NSFW " } else { "" };
         format!(
-            "{}{:?} mode round {}.\n{}\nExpiring <t:{}:R>.\nUse `/submit` or `/cancel` to continue.",
+            "{}{}{:?} mode round {}.\n{}\nExpiring <t:{}:R>.\nUse `/submit` or `/cancel` to continue.",
             in_progress,
+            sfw,
             mode,
             round + 1,
             mode.prompt(round),
@@ -193,9 +195,9 @@ impl SessionRepository {
     pub async fn get_pending(&self, aid: u64) -> DbResult<LobbyWithSessions<Pending>> {
         info!(aid = aid, "Get submission");
         let query = r#"
-        LET $user_session = SELECT * FROM sessions
+        LET $user_session = SELECT * FROM ONLY sessions
             WHERE state.what = $aid
-            AND state.type = "Pending"
+            AND state.type = "Pending";
         RETURN IF $user_session IS NONE {
             RETURN []
         } ELSE {
@@ -210,7 +212,7 @@ impl SessionRepository {
         }
         "#;
         let mut result = self.db.query(query).bind(("aid", aid)).await?;
-        result.take::<Option<_>>(0)?.found()
+        result.take::<Option<_>>(1)?.found()
     }
 
     /// Active -> Expired
@@ -401,7 +403,7 @@ impl SessionRepository {
         LET $user = type::thing("users", $uid);
         LET $lobby = SELECT * FROM ONLY lobbies
             WHERE mode = $mode
-            AND array::any(id<-(sessions WHERE state.type IN ["Uploading", "Pending"])) IS false
+            AND array::any(id<-(sessions WHERE state.type IN ["Active", "Uploading", "Pending"])) IS false
             AND array::len(id<-(sessions WHERE state.type IS "Accepted")) = $round
             ORDER BY rand() LIMIT 1;
         LET $user_session = RELATE ONLY $user->sessions->($lobby.id) CONTENT $session_content;
@@ -501,10 +503,11 @@ impl SessionRepository {
         SELECT
             mode,
             count() AS count,
-            array::len(<-(sessions WHERE state.type == "Accepted")) AS round
+            array::len(<-(sessions WHERE state.type IS "Accepted")) AS round,
+            nsfw
             FROM lobbies
-            WHERE <-(sessions WHERE state.type == "Active") IS []
-            GROUP BY mode, round
+            WHERE <-(sessions WHERE state.type IN ["Active", "Uploading", "Pending"]) IS []
+            GROUP BY mode, round, nsfw
         "#;
         let mut result = self.db.query(query).await?;
         let stats = result.take::<Vec<_>>(0)?.filter();
@@ -516,11 +519,12 @@ impl SessionRepository {
         SELECT
             mode,
             count() AS count,
-            array::len(<-(sessions WHERE state.type == "Accepted")) AS round
+            array::len(<-(sessions WHERE state.type IS "Accepted")) AS round,
+            nsfw
             FROM lobbies
-            WHERE <-(sessions WHERE state.type == "Active") IS []
+            WHERE <-(sessions WHERE state.type IN ["Active", "Uploading", "Pending"]) IS []
             AND array::any(id<-(sessions WHERE meta::id(in) IS $uid AND state.type NOT IN ["Cancelled", "Expired"])) IS false
-            GROUP BY mode, round
+            GROUP BY mode, round, nsfw
         "#;
         let mut result = self.db.query(query).bind(("uid", uid)).await?;
         let stats = result.take::<Vec<_>>(0)?.filter();
@@ -550,13 +554,16 @@ pub struct IncompleteGames {
     pub mode: Mode,
     pub count: u64,
     pub round: u64,
+    pub nsfw: bool,
 }
 
 impl Display for IncompleteGames {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let sfw = if self.nsfw { "NSFW " } else { "" };
         f.write_fmt(format_args!(
-            "{:?} mode - round {} - available {}",
+            "{:?} mode {}- round {} - available {}",
             self.mode,
+            sfw,
             self.round + 1,
             self.count
         ))

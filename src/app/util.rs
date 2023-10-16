@@ -47,8 +47,12 @@ pub async fn extract_2x2_image<T>(
 ) -> Result<RgbaImage, AppError> {
     let ar: ImageRepository = ctx.data().get();
     let mut images = Vec::with_capacity(4);
+    let channel = match lobby.lobby.nsfw {
+        true => CONFIG.channels.partial_nsfw,
+        false => CONFIG.channels.partial,
+    };
     for what in lobby.accepted.iter().map(|a| a.state.what) {
-        let image = fetch_image_from_channel(ctx, CONFIG.channels.partial, what).await?;
+        let image = fetch_image_from_channel(ctx, channel, what).await?;
         images.push(image);
     }
     if images.len() < 4 {
@@ -117,6 +121,7 @@ pub async fn show_round(
 ) -> Result<(), AppError> {
     let image = extract_2x2_image(ctx, lobby).await?;
     let attachment = image_to_attachment(image);
+    rsx.purge().await?;
     rsx.respond(|f| f.attachment(attachment).content(lobby.prompt(in_progress)))
         .await?;
     Ok(())

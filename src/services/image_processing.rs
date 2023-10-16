@@ -7,8 +7,7 @@ use image::{
     GenericImage, GenericImageView, ImageBuffer, Pixel, Rgba, RgbaImage,
 };
 use std::{cmp::max, io::Cursor, path::Path};
-use tokio::fs::OpenOptions;
-use tokio_util::io::read_buf;
+use tokio::{fs::OpenOptions, io::AsyncReadExt};
 
 const WHITE: Rgba<u8> = Rgba([255u8, 255u8, 255u8, 255u8]);
 
@@ -36,9 +35,9 @@ impl RgbaConvert for RgbaImage {
 
     async fn load(path: impl AsRef<Path> + Send + Sync) -> Self {
         let mut file = OpenOptions::default().read(true).open(path).await.unwrap();
-        let mut buf = BytesMut::new();
-        read_buf(&mut file, &mut buf).await.unwrap();
-        Self::from_png(&buf.freeze())
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf).await.unwrap();
+        Self::from_png(&BytesMut::from(&buf[..]).freeze())
     }
 }
 

@@ -7,9 +7,12 @@ use crate::app::{
 };
 use async_trait::async_trait;
 use poise::{Event, FrameworkContext};
-use rossbot::services::{database::session::SessionRepository, provider::Provider};
+use rossbot::services::{
+    database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker,
+};
 use serenity::prelude::Context;
 use std::cmp::Ordering;
+use tracing::info;
 
 #[derive(Debug)]
 pub struct AcceptSubmission;
@@ -72,6 +75,7 @@ impl AssetHandler for AcceptSubmission {
                     ))?;
 
                 let attachment = raw_image_to_attachment(raw_image.into());
+                info!("{:?}", &old_message.embeds);
                 let new_message = channel
                     .send_message(ctx, |m| {
                         m.add_file(attachment).content(&old_message.content)
@@ -88,6 +92,8 @@ impl AssetHandler for AcceptSubmission {
 
                 old_message.delete(&ctx).await?;
 
+                let sw: StatusUpdateWaker = data.get();
+                sw.wake();
                 Ok(())
             }
             _ => Ok(()),

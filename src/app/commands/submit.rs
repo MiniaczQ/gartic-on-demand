@@ -75,25 +75,23 @@ async fn process(
         }
     };
 
-    let nsfw = if lobby.lobby.nsfw { "NSFW" } else { "SFW" };
+    let sfw: &str = if lobby.lobby.nsfw { "NSFW " } else { "" };
     let content = format!(
-        "<@{}> - {:?} mode - round {} - {}",
-        uid, lobby.lobby.mode, lobby.active.round, nsfw
+        "<@{}> - {}{:?} mode - round {}",
+        uid, sfw, lobby.lobby.mode, lobby.active.round,
     );
     if trusted {
         let message = channel
-            .send_message(ctx, |m| m.add_file(image).embed(|e| e.description(content)))
+            .send_message(ctx, |m| m.add_file(image).content(content))
             .await?;
         sr.finish_submitting_trusted(uid, message.id.0).await
     } else {
         let message = channel
             .send_message(ctx, |m| {
-                m.add_file(image)
-                    .embed(|e| e.description(content))
-                    .reactions([
-                        ReactionType::Unicode(CONFIG.reactions.accept.clone()),
-                        ReactionType::Unicode(CONFIG.reactions.reject.clone()),
-                    ])
+                m.add_file(image).content(content).reactions([
+                    ReactionType::Unicode(CONFIG.reactions.accept.clone()),
+                    ReactionType::Unicode(CONFIG.reactions.reject.clone()),
+                ])
             })
             .await?;
         sr.finish_submitting_untrusted(uid, message.id.0).await
@@ -108,12 +106,15 @@ async fn process(
             .await?;
     } else {
         let next_round = lobby.round() + 1;
-        let lobby = sr
-            .find_attach(uid, lobby.lobby.mode, next_round)
-            .await
-            .map_user("No further rounds available currently.\nUse `/start` to play again.")?;
-
-        show_round(rsx, &ctx, &lobby, false).await?;
+        let maybe_lobby = sr.find_attach(uid, lobby.lobby.mode, next_round).await;
+        if let Ok(lobby) = maybe_lobby {
+            show_round(rsx, &ctx, &lobby, false).await?;
+        } else {
+            rsx.respond(|b| {
+                b.content("No further rounds available currently.\nUse `/start` to play again.")
+            })
+            .await?
+        }
     }
     let waker: StatusUpdateWaker = ctx.data().get();
     waker.wake();
