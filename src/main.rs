@@ -94,6 +94,7 @@ fn options() -> poise::FrameworkOptions<AppData, AppError> {
             commands::incomplete_games::incomplete_games(),
             commands::random_attributes::random_attributes(),
             commands::purge::purge(),
+            commands::extend::extend(),
         ],
         on_error: |error| Box::pin(on_error(error)),
         event_handler,

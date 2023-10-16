@@ -179,6 +179,22 @@ impl SessionRepository {
         result.take::<Option<_>>(1)?.found()
     }
 
+    pub async fn extend(&self, uid: u64, until: DateTime<Utc>) -> DbResult<()> {
+        info!(uid = uid, "Extend");
+        let query = r#"
+        UPDATE ONLY sessions
+            SET state.until = $until
+            WHERE meta::id(in) Is $uid
+            AND state.type IS "Active";
+        "#;
+        self.db
+            .query(query)
+            .bind(("uid", uid))
+            .bind(("until", until))
+            .await?;
+        Ok(())
+    }
+
     pub async fn get_pending(&self, aid: u64) -> DbResult<TypedSession<Pending>> {
         info!(aid = aid, "Get submission");
         let query = r#"
