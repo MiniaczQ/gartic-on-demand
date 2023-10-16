@@ -3,12 +3,12 @@ use crate::app::{
     error::ConvertError,
     permission::is_trusted,
     response::ResponseContext,
-    util::{extract_2x2_image, fetch_image_from_attachment, show_round},
+    util::{extract_2x2_image, fetch_image_from_attachment, session_destination, show_round},
     AppContext, AppError,
 };
 use poise::serenity_prelude::{Attachment, AttachmentType, ReactionType};
 use rossbot::services::{
-    database::session::{SessionRepository, SubmissionKind},
+    database::session::SessionRepository,
     gamemodes::GameLogic,
     image_processing::{concat_vertical, normalize_image_aoi, RgbaConvert},
     provider::Provider,
@@ -53,10 +53,10 @@ async fn process(
 
     let trusted = is_trusted(&ctx, user).await?;
 
-    let channel = match (trusted, &lobby.active.kind) {
-        (false, _) => CONFIG.channels.moderation,
-        (true, SubmissionKind::RossAttribute) => CONFIG.channels.partial,
-        (true, SubmissionKind::RossComplete) => CONFIG.channels.complete,
+    let channel = if !trusted {
+        CONFIG.channels.moderation
+    } else {
+        session_destination(&lobby)
     };
 
     let image = if is_last {
@@ -75,9 +75,10 @@ async fn process(
         }
     };
 
+    let nsfw = if lobby.lobby.nsfw { "NSFW" } else { "SFW" };
     let content = format!(
-        "<@{}> - {:?} mode - round {}",
-        uid, lobby.lobby.mode, lobby.active.round
+        "<@{}> - {:?} mode - round {} - {}",
+        uid, lobby.lobby.mode, lobby.active.round, nsfw
     );
     if trusted {
         let message = channel

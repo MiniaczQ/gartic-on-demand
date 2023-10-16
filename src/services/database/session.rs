@@ -76,8 +76,8 @@ pub enum SessionState {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum SubmissionKind {
-    RossAttribute,
-    RossComplete,
+    Partial,
+    Complete,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -190,12 +190,24 @@ impl SessionRepository {
         Ok(())
     }
 
-    pub async fn get_pending(&self, aid: u64) -> DbResult<TypedSession<Pending>> {
+    pub async fn get_pending(&self, aid: u64) -> DbResult<LobbyWithSessions<Pending>> {
         info!(aid = aid, "Get submission");
         let query = r#"
-        SELECT * FROM sessions
+        LET $user_session = SELECT * FROM sessions
             WHERE state.what = $aid
             AND state.type = "Pending"
+        RETURN IF $user_session IS NONE {
+            RETURN []
+        } ELSE {
+            RETURN (
+                SELECT
+                    out AS lobby,
+                    $user_session AS active,
+                    out<-(sessions WHERE state.type IS "Accepted") AS accepted
+                FROM $user_session
+                FETCH lobby, accepted
+            )
+        }
         "#;
         let mut result = self.db.query(query).bind(("aid", aid)).await?;
         result.take::<Option<_>>(0)?.found()

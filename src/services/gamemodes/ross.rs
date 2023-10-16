@@ -24,9 +24,9 @@ impl GameLogic for Ross {
 
     fn submission_kind(&self, round: u64) -> SubmissionKind {
         if round < LAST_ROUND {
-            SubmissionKind::RossAttribute
+            SubmissionKind::Partial
         } else {
-            SubmissionKind::RossComplete
+            SubmissionKind::Complete
         }
     }
 

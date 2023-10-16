@@ -12,7 +12,7 @@ use reqwest::header::{self, HeaderValue};
 use rossbot::services::{
     database::{
         assets::{AssetKind, ImageRepository},
-        session::{Active, LobbyWithSessions},
+        session::{Active, LobbyWithSessions, SubmissionKind},
     },
     image_processing::{concat_2_2, RgbaConvert},
     provider::Provider,
@@ -110,4 +110,13 @@ pub async fn show_round(
     rsx.respond(|f| f.attachment(attachment).content(lobby.prompt(in_progress)))
         .await?;
     Ok(())
+}
+
+pub fn session_destination<S>(lobby: &LobbyWithSessions<S>) -> ChannelId {
+    match (&lobby.active.kind, lobby.lobby.nsfw) {
+        (SubmissionKind::Partial, false) => CONFIG.channels.partial,
+        (SubmissionKind::Complete, false) => CONFIG.channels.complete,
+        (SubmissionKind::Partial, true) => CONFIG.channels.partial_nsfw,
+        (SubmissionKind::Complete, true) => CONFIG.channels.complete_nsfw,
+    }
 }

@@ -3,14 +3,11 @@ use crate::app::{
     config::CONFIG,
     error::{ConvertError, OptionEmptyError},
     permission::has_mod,
-    util::{fetch_raw_image_from_attachment, raw_image_to_attachment},
+    util::{fetch_raw_image_from_attachment, raw_image_to_attachment, session_destination},
 };
 use async_trait::async_trait;
 use poise::{Event, FrameworkContext};
-use rossbot::services::{
-    database::session::{SessionRepository, SubmissionKind},
-    provider::Provider,
-};
+use rossbot::services::{database::session::SessionRepository, provider::Provider};
 use serenity::prelude::Context;
 use std::cmp::Ordering;
 
@@ -55,15 +52,15 @@ impl AssetHandler for AcceptSubmission {
                 };
 
                 let old_aid = add_reaction.message_id.0;
-                let session = sr
+                let lobby = sr
                     .get_pending(old_aid)
                     .await
                     .map_internal("Failed to get pending session")?;
 
-                let channel = match (accepted, session.kind) {
-                    (true, SubmissionKind::RossAttribute) => CONFIG.channels.partial,
-                    (true, SubmissionKind::RossComplete) => CONFIG.channels.complete,
-                    (false, _) => CONFIG.channels.rejects,
+                let channel = if !accepted {
+                    CONFIG.channels.rejects
+                } else {
+                    session_destination(&lobby)
                 };
 
                 let old_message = add_reaction.message(&ctx).await?;
