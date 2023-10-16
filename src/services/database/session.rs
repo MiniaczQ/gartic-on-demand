@@ -398,11 +398,11 @@ impl SessionRepository {
             kind,
             state: active,
         };
-        // AND array::any(id<-(sessions WHERE in IS $user AND state.type NOT IN ["Cancelled", "Expired"])) IS false
         let query = r#"
         LET $user = type::thing("users", $uid);
         LET $lobby = SELECT * FROM ONLY lobbies
             WHERE mode = $mode
+            AND array::any(id<-(sessions WHERE in IS $user AND state.type NOT IN ["Cancelled", "Expired"])) IS false
             AND array::any(id<-(sessions WHERE state.type IN ["Active", "Uploading", "Pending"])) IS false
             AND array::len(id<-(sessions WHERE state.type IS "Accepted")) = $round
             ORDER BY rand() LIMIT 1;
