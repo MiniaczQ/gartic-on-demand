@@ -12,6 +12,7 @@ use rossbot::services::{
     gamemodes::GameLogic,
     image_processing::{concat_vertical, normalize_image_aoi, RgbaConvert},
     provider::Provider,
+    status_update::StatusUpdateWaker,
 };
 use std::borrow::Cow;
 use tracing::error;
@@ -111,5 +112,7 @@ async fn process(
         rsx.respond(|f| f.attachment(attachment).content(lobby.prompt_started()))
             .await?;
     }
+    let waker: StatusUpdateWaker = ctx.data().get();
+    waker.wake();
     Ok(())
 }

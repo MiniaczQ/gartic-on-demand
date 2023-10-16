@@ -1,5 +1,5 @@
 use crate::app::{error::ConvertError, response::ResponseContext, AppContext, AppError};
-use rossbot::services::{database::session::SessionRepository, provider::Provider};
+use rossbot::services::{database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker};
 use tracing::error;
 
 /// Show incomplete games in which you can participate through `round` parameter in `/start` command
@@ -21,6 +21,8 @@ async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(
     sr.stop_expired()
         .await
         .map_internal("Failed to unlock expired sessions")?;
+    let waker: StatusUpdateWaker = ctx.data().get();
+    waker.wake();
     let mut response = sr
         .incomplete_games_for_user(uid)
         .await

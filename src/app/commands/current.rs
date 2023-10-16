@@ -4,7 +4,7 @@ use crate::app::{
     util::{extract_2x2_image, image_to_attachment},
     AppContext, AppError,
 };
-use rossbot::services::{database::session::SessionRepository, provider::Provider};
+use rossbot::services::{database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker};
 use tracing::error;
 
 /// Get current game session
@@ -26,6 +26,8 @@ async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(
     sr.stop_expired()
         .await
         .map_internal("Failed to unlock expired sessions")?;
+    let waker: StatusUpdateWaker = ctx.data().get();
+    waker.wake();
     let lobby = sr.get(uid).await.map_user("No current game")?;
     let image = extract_2x2_image(ctx, &lobby).await?;
     let attachment = image_to_attachment(image);

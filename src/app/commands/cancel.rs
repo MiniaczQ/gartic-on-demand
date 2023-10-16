@@ -1,5 +1,7 @@
 use crate::app::{error::ConvertError, response::ResponseContext, AppContext, AppError};
-use rossbot::services::{database::session::SessionRepository, provider::Provider};
+use rossbot::services::{
+    database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker,
+};
 use tracing::error;
 
 /// Cancel the current game session
@@ -21,5 +23,7 @@ async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(
     sr.cancel(uid).await.map_user("No previous session")?;
     rsx.respond(|f| f.content("Aborted previous session"))
         .await?;
+    let waker: StatusUpdateWaker = ctx.data().get();
+    waker.wake();
     Ok(())
 }

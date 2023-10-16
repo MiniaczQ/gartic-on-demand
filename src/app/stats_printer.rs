@@ -1,31 +1,31 @@
 use std::time::Duration;
 
-use chrono::Utc;
-use rossbot::services::{
-    database::{session::SessionRepository, Database},
-    provider::Provider,
-};
-use serenity::prelude::Context;
-use tokio::time::interval;
-use tracing::{error, info};
-
 use super::{
     config::CONFIG,
     error::{AppError, ConvertError},
 };
+use chrono::Utc;
+use rossbot::services::{
+    database::{session::SessionRepository, Database},
+    provider::Provider,
+    status_update::StatusUpdateWaiter,
+};
+use serenity::prelude::Context;
+use tracing::{error, info};
 
 pub struct StatsPrinter {
     sr: SessionRepository,
+    sw: StatusUpdateWaiter,
     ctx: Context,
 }
 
 impl StatsPrinter {
-    pub fn new(db: Database, ctx: Context) -> Self {
+    pub fn new(db: Database, sw: StatusUpdateWaiter, ctx: Context) -> Self {
         let sr = db.get();
-        Self { sr, ctx }
+        Self { sr, sw, ctx }
     }
 
-    pub async fn run(self) {
+    pub async fn run(mut self) {
         loop {
             if let Err(e) = self.run_internal().await {
                 error!(error = %e, "Stats printer error");
@@ -33,9 +33,8 @@ impl StatsPrinter {
         }
     }
 
-    pub async fn run_internal(&self) -> Result<(), AppError> {
+    pub async fn run_internal(&mut self) -> Result<(), AppError> {
         info!("Starting stats printer");
-        let mut ticker = interval(Duration::from_secs(60));
         let channel = CONFIG.channels.stats;
         let messages = channel.messages(&self.ctx, |b| b).await?;
         for message in messages {
@@ -92,7 +91,8 @@ impl StatsPrinter {
                     })
                 })
                 .await?;
-            ticker.tick().await;
+            self.sw.wait().await;
+            tokio::time::sleep(Duration::from_secs(5)).await;
         }
     }
 }

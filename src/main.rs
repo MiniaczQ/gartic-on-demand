@@ -9,6 +9,7 @@ use app::{
     AppData,
 };
 use poise::{serenity_prelude::Ready, Event, Framework, FrameworkContext};
+use rossbot::services::{provider::Provider, status_update::status_update_pair};
 use serenity::prelude::{Context, GatewayIntents};
 use std::{future::Future, pin::Pin};
 use tokio::spawn;
@@ -32,7 +33,8 @@ async fn on_error(error: poise::FrameworkError<'_, AppData, AppError>) {
 async fn main() {
     app::log::setup();
     let options = options();
-    let app_data = AppData::setup().await.unwrap();
+    let (waker, waiter) = status_update_pair();
+    let app_data = AppData::setup(waker).await.unwrap();
 
     let intents = GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT
@@ -45,7 +47,7 @@ async fn main() {
         .token(token)
         .setup(
             move |ctx: &Context, _ready: &Ready, framework: &Framework<AppData, AppError>| {
-                let stats_printer = StatsPrinter::new(app_data.db.clone(), ctx.clone());
+                let stats_printer = StatsPrinter::new(app_data.get(), waiter, ctx.clone());
                 Box::pin(async move {
                     poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                     spawn(stats_printer.run());

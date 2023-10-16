@@ -11,6 +11,7 @@ use rossbot::services::{
     },
     gamemodes::{GameLogic, Mode},
     provider::Provider,
+    status_update::StatusUpdateWaker,
 };
 use std::ops::Sub;
 use tracing::error;
@@ -55,6 +56,8 @@ async fn process(
     sr.stop_expired()
         .await
         .map_internal("Failed to unlock expired sessions")?;
+    let waker: StatusUpdateWaker = ctx.data().get();
+    waker.wake();
 
     let maybe_lobby = sr.get(uid).await;
     if let Ok(lobby) = maybe_lobby {
@@ -74,6 +77,8 @@ async fn process(
     rsx.purge().await?;
     rsx.respond(|f| f.attachment(attachment).content(lobby.prompt_started()))
         .await?;
+    let waker: StatusUpdateWaker = ctx.data().get();
+    waker.wake();
     Ok(())
 }
 
