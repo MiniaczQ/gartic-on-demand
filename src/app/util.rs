@@ -1,6 +1,7 @@
 use super::{
     config::CONFIG,
     error::{AppError, ConvertError},
+    response::ResponseContext,
     AppContext,
 };
 use bytes::Bytes;
@@ -11,7 +12,7 @@ use reqwest::header::{self, HeaderValue};
 use rossbot::services::{
     database::{
         assets::{AssetKind, ImageRepository},
-        session::LobbyWithSessions,
+        session::{Active, LobbyWithSessions},
     },
     image_processing::{concat_2_2, RgbaConvert},
     provider::Provider,
@@ -41,7 +42,7 @@ pub async fn fetch_image_from_attachment(attachment: &Attachment) -> Option<Rgba
 }
 
 pub async fn extract_2x2_image<T>(
-    ctx: AppContext<'_>,
+    ctx: &AppContext<'_>,
     lobby: &LobbyWithSessions<T>,
 ) -> Result<RgbaImage, AppError> {
     let ar: ImageRepository = ctx.data().get();
@@ -87,7 +88,7 @@ pub fn image_to_attachment<'a>(image: RgbaImage) -> AttachmentType<'a> {
 }
 
 pub async fn fetch_image_from_channel(
-    ctx: AppContext<'_>,
+    ctx: &AppContext<'_>,
     channel: ChannelId,
     image_id: u64,
 ) -> Result<RgbaImage, AppError> {
@@ -96,4 +97,17 @@ pub async fn fetch_image_from_channel(
         .await
         .unwrap();
     Ok(image)
+}
+
+pub async fn show_round(
+    rsx: &mut ResponseContext<'_>,
+    ctx: &AppContext<'_>,
+    lobby: &LobbyWithSessions<Active>,
+    in_progress: bool,
+) -> Result<(), AppError> {
+    let image = extract_2x2_image(ctx, lobby).await?;
+    let attachment = image_to_attachment(image);
+    rsx.respond(|f| f.attachment(attachment).content(lobby.prompt(in_progress)))
+        .await?;
+    Ok(())
 }

@@ -1,10 +1,9 @@
 use crate::app::{
-    error::ConvertError,
-    response::ResponseContext,
-    util::{extract_2x2_image, image_to_attachment},
-    AppContext, AppError,
+    error::ConvertError, response::ResponseContext, util::show_round, AppContext, AppError,
 };
-use rossbot::services::{database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker};
+use rossbot::services::{
+    database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker,
+};
 use tracing::error;
 
 /// Get current game session
@@ -29,13 +28,6 @@ async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(
     let waker: StatusUpdateWaker = ctx.data().get();
     waker.wake();
     let lobby = sr.get(uid).await.map_user("No current game")?;
-    let image = extract_2x2_image(ctx, &lobby).await?;
-    let attachment = image_to_attachment(image);
-    rsx.purge().await?;
-    rsx.respond(|f| {
-        f.attachment(attachment)
-            .content(lobby.prompt_already_running())
-    })
-    .await?;
+    show_round(rsx, &ctx, &lobby, false).await?;
     Ok(())
 }

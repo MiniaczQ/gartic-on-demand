@@ -116,23 +116,17 @@ impl<S> LobbyWithSessions<S> {
 }
 
 impl LobbyWithSessions<Active> {
-    pub fn prompt_started(&self) -> String {
+    pub fn prompt(&self, in_progress: bool) -> String {
         let mode = self.lobby.mode;
         let round = self.round();
+        let in_progress = if in_progress {
+            "Already in progress.\n"
+        } else {
+            ""
+        };
         format!(
-            "Started {:?} mode round {}.\n{}\nExpiring <t:{}:R>.\nUse `/submit` or `/cancel` to continue.",
-            mode,
-            round + 1,
-            mode.prompt(round),
-            self.active.state.until.timestamp()
-        )
-    }
-
-    pub fn prompt_already_running(&self) -> String {
-        let mode = self.lobby.mode;
-        let round = self.round();
-        format!(
-            "{:?} mode round {} already running.\n{}\nExpiring <t:{}:R>.\nUse `/submit` or `/cancel` to continue.",
+            "{}{:?} mode round {}.\n{}\nExpiring <t:{}:R>.\nUse `/submit` or `/cancel` to continue.",
+            in_progress,
             mode,
             round + 1,
             mode.prompt(round),

@@ -1,7 +1,7 @@
 use crate::app::{
     error::{AppError, ConvertError},
     response::ResponseContext,
-    util::{extract_2x2_image, image_to_attachment},
+    util::show_round,
     AppContext,
 };
 use rossbot::services::{
@@ -61,22 +61,11 @@ async fn process(
 
     let maybe_lobby = sr.get(uid).await;
     if let Ok(lobby) = maybe_lobby {
-        let image = extract_2x2_image(ctx, &lobby).await?;
-        let attachment = image_to_attachment(image);
-        rsx.respond(|f| {
-            f.attachment(attachment)
-                .content(lobby.prompt_already_running())
-        })
-        .await?;
-        return Ok(());
+        return show_round(rsx, &ctx, &lobby, true).await;
     }
 
     let lobby = find_or_create_session(sr, uid, mode, round).await?;
-    let image = extract_2x2_image(ctx, &lobby).await?;
-    let attachment = image_to_attachment(image);
-    rsx.purge().await?;
-    rsx.respond(|f| f.attachment(attachment).content(lobby.prompt_started()))
-        .await?;
+    show_round(rsx, &ctx, &lobby, false).await?;
     let waker: StatusUpdateWaker = ctx.data().get();
     waker.wake();
     Ok(())

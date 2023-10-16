@@ -35,7 +35,7 @@ async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(
     }
     let mut images = Vec::with_capacity(4);
     for id in ids {
-        let image = fetch_image_from_channel(ctx, CONFIG.channels.partial, id).await?;
+        let image = fetch_image_from_channel(&ctx, CONFIG.channels.partial, id).await?;
         images.push(image);
     }
     let image = concat_2_2(&images);

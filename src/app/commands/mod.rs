@@ -1,10 +1,10 @@
 pub mod add_asset;
 pub mod cancel;
 pub mod current;
+pub mod extend;
 pub mod help;
 pub mod incomplete_games;
+pub mod purge;
 pub mod random_attributes;
 pub mod start;
 pub mod submit;
-pub mod purge;
-pub mod extend;

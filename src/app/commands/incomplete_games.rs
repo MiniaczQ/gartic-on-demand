@@ -1,5 +1,7 @@
 use crate::app::{error::ConvertError, response::ResponseContext, AppContext, AppError};
-use rossbot::services::{database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker};
+use rossbot::services::{
+    database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker,
+};
 use tracing::error;
 
 /// Show incomplete games in which you can participate through `round` parameter in `/start` command

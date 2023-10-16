@@ -3,7 +3,7 @@ use crate::app::{
     error::ConvertError,
     permission::is_trusted,
     response::ResponseContext,
-    util::{extract_2x2_image, fetch_image_from_attachment, image_to_attachment},
+    util::{extract_2x2_image, fetch_image_from_attachment, show_round},
     AppContext, AppError,
 };
 use poise::serenity_prelude::{Attachment, AttachmentType, ReactionType};
@@ -60,7 +60,7 @@ async fn process(
     };
 
     let image = if is_last {
-        let attributes = extract_2x2_image(ctx, &lobby).await?;
+        let attributes = extract_2x2_image(&ctx, &lobby).await?;
         let image = normalize_image_aoi(&image, 2 * CONFIG.image.width, 2 * CONFIG.image.height);
         let image = concat_vertical(&[attributes, image]);
         AttachmentType::Bytes {
@@ -106,11 +106,7 @@ async fn process(
             .await
             .map_user("No further rounds available currently.\nUse `/start` to play again.")?;
 
-        let image = extract_2x2_image(ctx, &lobby).await?;
-        let attachment = image_to_attachment(image);
-        rsx.purge().await?;
-        rsx.respond(|f| f.attachment(attachment).content(lobby.prompt_started()))
-            .await?;
+        show_round(rsx, &ctx, &lobby, false).await?;
     }
     let waker: StatusUpdateWaker = ctx.data().get();
     waker.wake();
