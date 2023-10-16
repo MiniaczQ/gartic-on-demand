@@ -52,24 +52,34 @@ pub async fn extract_2x2_image<T>(
         images.push(image);
     }
     if images.len() < 4 {
+        let required = 1;
         let assets = ar
-            .random(AssetKind::DrawThis, 1)
+            .random(AssetKind::DrawThis, required)
             .await
             .map_internal("Missing DrawThis assets")?;
+        let placeholders = required - assets.len() as u32;
         for image in assets.into_iter().map(|a| a.id) {
             let image = fetch_image_from_channel(ctx, CONFIG.channels.draw_this, image).await?;
             images.push(image);
         }
+        for _ in 0..placeholders {
+            images.push(RgbaImage::load("./assets/placeholders/draw-this.png").await);
+        }
     }
     if images.len() < 4 {
+        let required = 4 - images.len() as u32;
         let assets = ar
-            .random(AssetKind::InConstruction, 4 - images.len() as u32)
+            .random(AssetKind::InConstruction, required)
             .await
             .map_internal("Missing InConstruction assets")?;
+        let placeholders = required - assets.len() as u32;
         for image in assets.into_iter().map(|a| a.id) {
             let image =
                 fetch_image_from_channel(ctx, CONFIG.channels.in_contruction, image).await?;
             images.push(image);
+        }
+        for _ in 0..placeholders {
+            images.push(RgbaImage::load("./assets/placeholders/in-construction.png").await);
         }
     }
     let image = concat_2_2(&images);

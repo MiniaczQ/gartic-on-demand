@@ -1,19 +1,25 @@
-use bytes::Bytes;
+use async_trait::async_trait;
+use bytes::{Bytes, BytesMut};
 use image::{
     codecs::png::PngEncoder,
     imageops::{self, FilterType},
     io::Reader,
     GenericImage, GenericImageView, ImageBuffer, Pixel, Rgba, RgbaImage,
 };
-use std::{cmp::max, io::Cursor};
+use std::{cmp::max, io::Cursor, path::Path};
+use tokio::fs::OpenOptions;
+use tokio_util::io::read_buf;
 
 const WHITE: Rgba<u8> = Rgba([255u8, 255u8, 255u8, 255u8]);
 
+#[async_trait]
 pub trait RgbaConvert {
     fn from_png(bytes: &Bytes) -> Self;
     fn to_png(&self) -> Vec<u8>;
+    async fn load(path: impl AsRef<Path> + Send + Sync) -> Self;
 }
 
+#[async_trait]
 impl RgbaConvert for RgbaImage {
     fn from_png(bytes: &Bytes) -> Self {
         let mut reader = Reader::new(Cursor::new(bytes));
@@ -26,6 +32,13 @@ impl RgbaConvert for RgbaImage {
         let encoder = PngEncoder::new(&mut writer);
         self.write_with_encoder(encoder).unwrap();
         writer
+    }
+
+    async fn load(path: impl AsRef<Path> + Send + Sync) -> Self {
+        let mut file = OpenOptions::default().read(true).open(path).await.unwrap();
+        let mut buf = BytesMut::new();
+        read_buf(&mut file, &mut buf).await.unwrap();
+        Self::from_png(&buf.freeze())
     }
 }
 
