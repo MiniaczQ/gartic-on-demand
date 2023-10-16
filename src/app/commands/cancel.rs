@@ -21,7 +21,7 @@ async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(
     let sr: SessionRepository = ctx.data().get();
     let uid = ctx.author().id.0;
     sr.cancel(uid).await.map_user("No previous session")?;
-    rsx.respond(|f| f.content("Aborted previous session"))
+    rsx.respond(|f| f.content("Cancelled previous session"))
         .await?;
     let waker: StatusUpdateWaker = ctx.data().get();
     waker.wake();

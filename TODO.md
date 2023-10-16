@@ -1,2 +1,0 @@
-- Clean up image extraction, processing and embeding API (helper traits?)
-- Clean up shared or soon to be shared logic elements - start, submit, reroll

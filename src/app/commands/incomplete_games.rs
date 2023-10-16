@@ -4,7 +4,7 @@ use rossbot::services::{
 };
 use tracing::error;
 
-/// Show incomplete games in which you can participate through `round` parameter in `/start` command
+/// Show incomplete games in which you have yet yo play
 #[poise::command(slash_command, guild_only)]
 pub async fn incomplete_games(ctx: AppContext<'_>) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);

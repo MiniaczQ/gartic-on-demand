@@ -75,18 +75,24 @@ async fn process(
         }
     };
 
+    let content = format!(
+        "<@{}> - {:?} mode - round {}",
+        uid, lobby.lobby.mode, lobby.active.round
+    );
     if trusted {
         let message = channel
-            .send_message(ctx, |m| m.add_file(image).content(format!("<@{}>", uid)))
+            .send_message(ctx, |m| m.add_file(image).embed(|e| e.description(content)))
             .await?;
         sr.finish_submitting_trusted(uid, message.id.0).await
     } else {
         let message = channel
             .send_message(ctx, |m| {
-                m.add_file(image).content(format!("<@{}>", uid)).reactions([
-                    ReactionType::Unicode(CONFIG.reactions.accept.clone()),
-                    ReactionType::Unicode(CONFIG.reactions.reject.clone()),
-                ])
+                m.add_file(image)
+                    .embed(|e| e.description(content))
+                    .reactions([
+                        ReactionType::Unicode(CONFIG.reactions.accept.clone()),
+                        ReactionType::Unicode(CONFIG.reactions.reject.clone()),
+                    ])
             })
             .await?;
         sr.finish_submitting_untrusted(uid, message.id.0).await
