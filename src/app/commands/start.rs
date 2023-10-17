@@ -94,7 +94,7 @@ async fn find_or_create_session(
         None.map_user("Gamemode does not support this many rounds")?;
     }
 
-    let maybe_lobby = sr.find_attach(uid, mode, round).await;
+    let maybe_lobby = sr.find_attach(uid, mode, round, nsfw).await;
     let lobby = match (maybe_lobby, round) {
         (Ok(lobby), _) => lobby,
         (Err(DbError::NotFound), 0) => sr

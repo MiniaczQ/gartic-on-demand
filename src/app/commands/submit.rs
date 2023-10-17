@@ -48,7 +48,7 @@ async fn process(
                 .mode
                 .render_complete(&ctx, &lobby, &ctx.data().get(), &attachment)
                 .await?;
-            let content = lobby.description_short();
+            let content = lobby.description_long();
             (channel, attachment, content)
         } else {
             let channel = match lobby.lobby.nsfw {
@@ -91,7 +91,9 @@ async fn process(
             .await?;
     } else {
         let next_round = lobby.round() + 1;
-        let maybe_lobby = sr.find_attach(uid, lobby.lobby.mode, next_round).await;
+        let maybe_lobby = sr
+            .find_attach(uid, lobby.lobby.mode, next_round, lobby.lobby.nsfw)
+            .await;
         if let Ok(lobby) = maybe_lobby {
             respond_with_prompt(rsx, &ctx, &lobby, false).await?;
         } else {

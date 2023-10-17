@@ -76,7 +76,7 @@ impl AssetHandler for AcceptSubmission {
                             .mode
                             .render_complete(&ctx, &lobby, &data.get(), old_attachment)
                             .await?;
-                        let content = lobby.description_short();
+                        let content = lobby.description_long();
                         (channel, attachment, content)
                     } else {
                         let channel = match lobby.lobby.nsfw {

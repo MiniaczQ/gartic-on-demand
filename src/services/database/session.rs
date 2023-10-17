@@ -1,6 +1,6 @@
 use super::{Database, DbResult, IdConversionError, IdConvert, MapToNotFound, RawRecord, Record};
 use crate::services::{
-    gamemodes::{GameLogic, Mode},
+    gamemodes::{ross::Ross, GameLogic, Mode},
     provider::Provider,
 };
 use chrono::{DateTime, Utc};
@@ -81,6 +81,7 @@ pub struct Session {
     pub round: u64,
     pub last: bool,
     pub mode: Mode,
+    pub nsfw: bool,
     pub state: SessionState,
 }
 
@@ -92,6 +93,7 @@ pub struct RawTypedSession<T> {
     pub round: u64,
     pub last: bool,
     pub mode: Mode,
+    pub nsfw: bool,
     pub state: T,
 }
 
@@ -102,6 +104,7 @@ pub struct TypedSession<T> {
     pub round: u64,
     pub last: bool,
     pub mode: Mode,
+    pub nsfw: bool,
     pub state: T,
 }
 
@@ -119,6 +122,7 @@ impl<T> TryFrom<RawTypedSession<T>> for TypedSession<T> {
             round: value.round,
             last: value.last,
             mode: value.mode,
+            nsfw: value.nsfw,
             state: value.state,
         })
     }
@@ -182,7 +186,10 @@ impl<S> LobbyWithSessions<S> {
         let sfw: &str = if self.lobby.nsfw { "NSFW " } else { "" };
         let content = format!(
             "<@{}> - {}{:?} mode - round {}",
-            self.active.who, sfw, self.lobby.mode, self.active.round,
+            self.active.who,
+            sfw,
+            self.lobby.mode,
+            self.active.round + 1,
         );
         content
     }
@@ -197,7 +204,11 @@ impl<S> LobbyWithSessions<S> {
         let attribute_authors = attribute_authors.join(", ");
         let content = format!(
             "<@{}> - {}{:?} mode - round {}\nAttributes by: {}",
-            self.active.who, sfw, self.lobby.mode, self.active.round, attribute_authors
+            self.active.who,
+            sfw,
+            self.lobby.mode,
+            self.active.round + 1,
+            attribute_authors
         );
         content
     }
@@ -485,6 +496,7 @@ impl SessionRepository {
         uid: u64,
         mode: Mode,
         round: u64,
+        nsfw: bool,
     ) -> DbResult<LobbyWithSessions<Active>> {
         info!(uid = uid, mode = ?mode, round = round, "Find attach");
         let now = Utc::now();
@@ -496,15 +508,18 @@ impl SessionRepository {
             round,
             mode,
             last,
+            nsfw,
             state: active,
         };
+        // AND array::any(id<-(sessions WHERE in IS $user AND state.type NOT IN ["Cancelled", "Expired"])) IS false
         let query = r#"
         LET $user = type::thing("users", $uid);
         LET $lobby = SELECT * FROM ONLY lobbies
             WHERE mode = $mode
-            AND array::any(id<-(sessions WHERE in IS $user AND state.type NOT IN ["Cancelled", "Expired"])) IS false
+            
             AND array::any(id<-(sessions WHERE state.type IN ["Active", "Uploading", "Pending"])) IS false
             AND array::len(id<-(sessions WHERE state.type IS "Accepted")) = $round
+            AND nsfw IS $nsfw
             ORDER BY rand() LIMIT 1;
         LET $user_session = RELATE ONLY $user->sessions->($lobby.id) CONTENT $session_content;
         RETURN IF $user_session IS NONE {
@@ -526,6 +541,7 @@ impl SessionRepository {
             .bind(("uid", uid))
             .bind(("mode", mode))
             .bind(("round", round))
+            .bind(("nsfw", nsfw))
             .bind(("session_content", session))
             .await?;
         let lobby = result
@@ -553,6 +569,7 @@ impl SessionRepository {
             round: 0,
             mode,
             last,
+            nsfw,
             state: active,
         };
         let lobby = Lobby {
@@ -571,7 +588,7 @@ impl SessionRepository {
                 SELECT
                     out AS lobby,
                     $user_session AS active,
-                    out<-(sessions WHERE state.type IS "Accepted") AS accepted,
+                    out<-(sessions WHERE state.type IS "Accepted") AS accepted
                 FROM $user_session
                 FETCH lobby, accepted
             )
@@ -644,11 +661,21 @@ impl SessionRepository {
         let query = r#"
         LET $attr = SELECT *
             FROM sessions
-            WHERE state.type = "Accepted"
+            WHERE mode IS $mode
+            WHERE nsfw IS $nsfw
+            WHERE last IS $last
+            WHERE state.type IS "Accepted"
             ORDER BY rand() LIMIT $limit;
         SELECT state.what AS id FROM $attr
         "#;
-        let mut result = self.db.query(query).bind(("limit", n)).await?;
+        let mut result = self
+            .db
+            .query(query)
+            .bind(("limit", n))
+            .bind(("mode", Ross))
+            .bind(("nsfw", false))
+            .bind(("last", false))
+            .await?;
         let users = result
             .take::<Vec<Record<()>>>(1)?
             .into_iter()
@@ -686,7 +713,7 @@ pub trait PlayableFilter {
 impl PlayableFilter for Vec<IncompleteGames> {
     fn filter(self) -> Self {
         self.into_iter()
-            .filter(|p| p.round != p.mode.last_round() && p.round != 0)
+            .filter(|p| p.round <= p.mode.last_round() && p.round != 0)
             .collect()
     }
 }
