@@ -1,6 +1,7 @@
 use super::{
     config::CONFIG,
     error::{AppError, ConvertError},
+    renderer::Renderer,
     response::ResponseContext,
     AppContext,
 };
@@ -12,11 +13,12 @@ use reqwest::header::{self, HeaderValue};
 use rossbot::services::{
     database::{
         assets::{AssetKind, ImageRepository},
-        session::{Active, LobbyWithSessions, SubmissionKind},
+        session::{Active, LobbyWithSessions},
     },
     image_processing::{concat_2_2, RgbaConvert},
     provider::Provider,
 };
+use serenity::http::Http;
 
 pub async fn fetch_raw_image_from_attachment(attachment: &Attachment) -> Option<Bytes> {
     if attachment.content_type.as_deref() != Some(IMAGE_PNG.essence_str()) {
@@ -42,10 +44,10 @@ pub async fn fetch_image_from_attachment(attachment: &Attachment) -> Option<Rgba
 }
 
 pub async fn extract_2x2_image<T>(
-    ctx: &AppContext<'_>,
+    ctx: &(impl AsRef<Http> + Send + Sync),
     lobby: &LobbyWithSessions<T>,
+    ir: &ImageRepository,
 ) -> Result<RgbaImage, AppError> {
-    let ar: ImageRepository = ctx.data().get();
     let mut images = Vec::with_capacity(4);
     let channel = match lobby.lobby.nsfw {
         true => CONFIG.channels.partial_nsfw,
@@ -57,7 +59,7 @@ pub async fn extract_2x2_image<T>(
     }
     if images.len() < 4 {
         let required = 1;
-        let assets = ar
+        let assets = ir
             .random(AssetKind::DrawThis, required)
             .await
             .map_internal("Missing DrawThis assets")?;
@@ -72,7 +74,7 @@ pub async fn extract_2x2_image<T>(
     }
     if images.len() < 4 {
         let required = 4 - images.len() as u32;
-        let assets = ar
+        let assets = ir
             .random(AssetKind::InConstruction, required)
             .await
             .map_internal("Missing InConstruction assets")?;
@@ -102,7 +104,7 @@ pub fn image_to_attachment<'a>(image: RgbaImage) -> AttachmentType<'a> {
 }
 
 pub async fn fetch_image_from_channel(
-    ctx: &AppContext<'_>,
+    ctx: &impl AsRef<Http>,
     channel: ChannelId,
     image_id: u64,
 ) -> Result<RgbaImage, AppError> {
@@ -113,14 +115,17 @@ pub async fn fetch_image_from_channel(
     Ok(image)
 }
 
-pub async fn show_round(
+pub async fn respond_with_prompt(
     rsx: &mut ResponseContext<'_>,
     ctx: &AppContext<'_>,
     lobby: &LobbyWithSessions<Active>,
     in_progress: bool,
 ) -> Result<(), AppError> {
-    let image = extract_2x2_image(ctx, lobby).await?;
-    let attachment = image_to_attachment(image);
+    let attachment = lobby
+        .active
+        .mode
+        .render_prompt(ctx, lobby, &ctx.data().get())
+        .await?;
     rsx.purge().await?;
     rsx.respond(|f| f.attachment(attachment).content(lobby.prompt(in_progress)))
         .await?;
@@ -128,10 +133,10 @@ pub async fn show_round(
 }
 
 pub fn session_destination<S>(lobby: &LobbyWithSessions<S>) -> ChannelId {
-    match (&lobby.active.kind, lobby.lobby.nsfw) {
-        (SubmissionKind::Partial, false) => CONFIG.channels.partial,
-        (SubmissionKind::Complete, false) => CONFIG.channels.complete,
-        (SubmissionKind::Partial, true) => CONFIG.channels.partial_nsfw,
-        (SubmissionKind::Complete, true) => CONFIG.channels.complete_nsfw,
+    match (&lobby.active.last, lobby.lobby.nsfw) {
+        (false, false) => CONFIG.channels.partial,
+        (true, false) => CONFIG.channels.complete,
+        (false, true) => CONFIG.channels.partial_nsfw,
+        (true, true) => CONFIG.channels.complete_nsfw,
     }
 }

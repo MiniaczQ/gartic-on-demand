@@ -1,20 +1,11 @@
 use crate::app::{
-    config::CONFIG,
-    error::ConvertError,
-    permission::is_trusted,
-    response::ResponseContext,
-    util::{extract_2x2_image, fetch_image_from_attachment, session_destination, show_round},
-    AppContext, AppError,
+    config::CONFIG, error::ConvertError, permission::is_trusted, renderer::Renderer,
+    response::ResponseContext, util::respond_with_prompt, AppContext, AppError,
 };
-use poise::serenity_prelude::{Attachment, AttachmentType, ReactionType};
+use poise::serenity_prelude::{Attachment, ReactionType};
 use rossbot::services::{
-    database::session::SessionRepository,
-    gamemodes::GameLogic,
-    image_processing::{concat_vertical, normalize_image_aoi, RgbaConvert},
-    provider::Provider,
-    status_update::StatusUpdateWaker,
+    database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker,
 };
-use std::borrow::Cow;
 use tracing::error;
 
 /// Submit an image to the current game session
@@ -44,71 +35,65 @@ async fn process(
         .await
         .map_internal("Failed to find existing session")?;
 
-    let round = lobby.round();
-    let is_last = lobby.lobby.mode.last_round() == round;
-
-    let image = fetch_image_from_attachment(&attachment)
-        .await
-        .map_user("Attachment is not a valid image")?;
-
     let trusted = is_trusted(&ctx, user).await?;
 
-    let channel = if !trusted {
-        CONFIG.channels.moderation
-    } else {
-        session_destination(&lobby)
-    };
-
-    let image = if is_last {
-        let attributes = extract_2x2_image(&ctx, &lobby).await?;
-        let image = normalize_image_aoi(&image, 2 * CONFIG.image.width, 2 * CONFIG.image.height);
-        let image = concat_vertical(&[attributes, image]);
-        AttachmentType::Bytes {
-            data: Cow::Owned(image.to_png().to_vec()),
-            filename: ctx.id().to_string() + ".png",
-        }
-    } else {
-        let image = normalize_image_aoi(&image, CONFIG.image.width, CONFIG.image.height);
-        AttachmentType::Bytes {
-            data: Cow::Owned(image.to_png().to_vec()),
-            filename: ctx.id().to_string() + ".png",
-        }
-    };
-
-    let sfw: &str = if lobby.lobby.nsfw { "NSFW " } else { "" };
-    let content = format!(
-        "<@{}> - {}{:?} mode - round {}",
-        uid, sfw, lobby.lobby.mode, lobby.active.round,
-    );
     if trusted {
+        let (channel, attachment, content) = if lobby.active.last {
+            let channel = match lobby.lobby.nsfw {
+                true => CONFIG.channels.complete_nsfw,
+                false => CONFIG.channels.complete,
+            };
+            let attachment = lobby
+                .active
+                .mode
+                .render_complete(&ctx, &lobby, &ctx.data().get(), &attachment)
+                .await?;
+            let content = lobby.description_short();
+            (channel, attachment, content)
+        } else {
+            let channel = match lobby.lobby.nsfw {
+                true => CONFIG.channels.partial_nsfw,
+                false => CONFIG.channels.partial,
+            };
+            let attachment = lobby.active.mode.render_partial(&attachment).await?;
+            let content = lobby.description_short();
+            (channel, attachment, content)
+        };
+
         let message = channel
-            .send_message(ctx, |m| m.add_file(image).content(content))
+            .send_message(ctx, |m| m.add_file(attachment).content(content))
             .await?;
-        sr.finish_submitting_trusted(uid, message.id.0).await
+        sr.finish_submitting_trusted(uid, message.id.0)
+            .await
+            .map_internal("Failed to attach image")?;
     } else {
+        let channel = CONFIG.channels.moderation;
+        let attachment = lobby.active.mode.render_partial(&attachment).await?;
+        let content = lobby.description_short();
         let message = channel
             .send_message(ctx, |m| {
-                m.add_file(image).content(content).reactions([
+                m.add_file(attachment).content(content).reactions([
                     ReactionType::Unicode(CONFIG.reactions.accept.clone()),
                     ReactionType::Unicode(CONFIG.reactions.reject.clone()),
                 ])
             })
             .await?;
-        sr.finish_submitting_untrusted(uid, message.id.0).await
+        sr.finish_submitting_untrusted(uid, message.id.0)
+            .await
+            .map_internal("Failed to attach image")?;
     }
-    .map_internal("Failed to attach image")?;
 
     rsx.respond(|f| f.content("Submited!")).await?;
     rsx.reset();
 
-    if is_last {
+    if lobby.active.last {
         rsx.respond(|b| b.content("This was the final round.\nUse `/start` to play again."))
             .await?;
     } else {
         let next_round = lobby.round() + 1;
         let maybe_lobby = sr.find_attach(uid, lobby.lobby.mode, next_round).await;
         if let Ok(lobby) = maybe_lobby {
-            show_round(rsx, &ctx, &lobby, false).await?;
+            respond_with_prompt(rsx, &ctx, &lobby, false).await?;
         } else {
             rsx.respond(|b| {
                 b.content("No further rounds available currently.\nUse `/start` to play again.")

@@ -1,5 +1,5 @@
 use crate::app::{
-    error::ConvertError, response::ResponseContext, util::show_round, AppContext, AppError,
+    error::ConvertError, response::ResponseContext, util::respond_with_prompt, AppContext, AppError,
 };
 use rossbot::services::{
     database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker,
@@ -28,6 +28,6 @@ async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(
     let waker: StatusUpdateWaker = ctx.data().get();
     waker.wake();
     let lobby = sr.get(uid).await.map_user("No current game")?;
-    show_round(rsx, &ctx, &lobby, false).await?;
+    respond_with_prompt(rsx, &ctx, &lobby, false).await?;
     Ok(())
 }

@@ -2,7 +2,7 @@ use crate::app::{
     error::{AppError, ConvertError},
     permission::is_adult,
     response::ResponseContext,
-    util::show_round,
+    util::respond_with_prompt,
     AppContext,
 };
 use rossbot::services::{
@@ -53,12 +53,10 @@ async fn process(
     let round = round.unwrap_or(1).sub(1);
     let nsfw = nsfw.unwrap_or(false);
 
-    if nsfw {
-        if !is_adult(&ctx, &user).await? {
-            rsx.respond(|b| b.content("You need the `+18` role to participate in NSFW games."))
-                .await?;
-            return Ok(());
-        }
+    if nsfw && !is_adult(&ctx, user).await? {
+        rsx.respond(|b| b.content("You need the `+18` role to participate in NSFW games."))
+            .await?;
+        return Ok(());
     }
 
     sr.ensure_user(uid, &user.name)
@@ -73,11 +71,11 @@ async fn process(
 
     let maybe_lobby = sr.get(uid).await;
     if let Ok(lobby) = maybe_lobby {
-        return show_round(rsx, &ctx, &lobby, true).await;
+        return respond_with_prompt(rsx, &ctx, &lobby, true).await;
     }
 
     let lobby = find_or_create_session(sr, uid, mode, round, nsfw).await?;
-    show_round(rsx, &ctx, &lobby, false).await?;
+    respond_with_prompt(rsx, &ctx, &lobby, false).await?;
     let waker: StatusUpdateWaker = ctx.data().get();
     waker.wake();
     Ok(())

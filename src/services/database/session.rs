@@ -1,4 +1,4 @@
-use super::{Database, DbResult, IdConvert, MapToNotFound, RawRecord, Record};
+use super::{Database, DbResult, IdConversionError, IdConvert, MapToNotFound, RawRecord, Record};
 use crate::services::{
     gamemodes::{GameLogic, Mode},
     provider::Provider,
@@ -6,6 +6,7 @@ use crate::services::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, ops::Add};
+use surrealdb::sql::{Id, Thing};
 use tracing::info;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -75,25 +76,80 @@ pub enum SessionState {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum SubmissionKind {
-    Partial,
-    Complete,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct Session {
     pub started_at: DateTime<Utc>,
     pub round: u64,
-    pub kind: SubmissionKind,
+    pub last: bool,
+    pub mode: Mode,
     pub state: SessionState,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RawTypedSession<T> {
+    pub started_at: DateTime<Utc>,
+    #[serde(rename = "in")]
+    pub who: Thing,
+    pub round: u64,
+    pub last: bool,
+    pub mode: Mode,
+    pub state: T,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TypedSession<T> {
     pub started_at: DateTime<Utc>,
+    pub who: u64,
     pub round: u64,
-    pub kind: SubmissionKind,
+    pub last: bool,
+    pub mode: Mode,
     pub state: T,
+}
+
+impl<T> TryFrom<RawTypedSession<T>> for TypedSession<T> {
+    type Error = IdConversionError;
+
+    fn try_from(value: RawTypedSession<T>) -> Result<Self, Self::Error> {
+        let Id::Number(id) = value.who.id else {
+            Err(IdConversionError)?
+        };
+        let id: u64 = id.try_into().map_err(|_| IdConversionError)?;
+        Ok(TypedSession {
+            started_at: value.started_at,
+            who: id,
+            round: value.round,
+            last: value.last,
+            mode: value.mode,
+            state: value.state,
+        })
+    }
+}
+
+impl<T> IdConvert for RawTypedSession<T> {
+    type Target = TypedSession<T>;
+
+    fn convert_id(self) -> Result<Self::Target, IdConversionError> {
+        self.try_into()
+    }
+}
+
+impl<T> IdConvert for Vec<RawTypedSession<T>> {
+    type Target = Vec<TypedSession<T>>;
+
+    fn convert_id(self) -> Result<Self::Target, IdConversionError> {
+        self.into_iter().map(TypedSession::try_from).collect()
+    }
+}
+
+impl<T> IdConvert for RawLobbyWithSessions<T> {
+    type Target = LobbyWithSessions<T>;
+
+    fn convert_id(self) -> Result<Self::Target, IdConversionError> {
+        Ok(LobbyWithSessions {
+            lobby: self.lobby,
+            accepted: self.accepted.convert_id()?,
+            active: self.active.convert_id()?,
+        })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -101,6 +157,13 @@ pub struct Lobby {
     pub created_at: DateTime<Utc>,
     pub mode: Mode,
     pub nsfw: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RawLobbyWithSessions<S> {
+    pub lobby: Lobby,
+    pub accepted: Vec<RawTypedSession<Accepted>>,
+    pub active: RawTypedSession<S>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -113,6 +176,30 @@ pub struct LobbyWithSessions<S> {
 impl<S> LobbyWithSessions<S> {
     pub fn round(&self) -> u64 {
         self.accepted.len() as u64
+    }
+
+    pub fn description_short(&self) -> String {
+        let sfw: &str = if self.lobby.nsfw { "NSFW " } else { "" };
+        let content = format!(
+            "<@{}> - {}{:?} mode - round {}",
+            self.active.who, sfw, self.lobby.mode, self.active.round,
+        );
+        content
+    }
+
+    pub fn description_long(&self) -> String {
+        let sfw: &str = if self.lobby.nsfw { "NSFW " } else { "" };
+        let attribute_authors = self
+            .accepted
+            .iter()
+            .map(|a| format!("<@{}>", a.who))
+            .collect::<Vec<_>>();
+        let attribute_authors = attribute_authors.join(", ");
+        let content = format!(
+            "<@{}> - {}{:?} mode - round {}\nAttributes by: {}",
+            self.active.who, sfw, self.lobby.mode, self.active.round, attribute_authors
+        );
+        content
     }
 }
 
@@ -173,7 +260,11 @@ impl SessionRepository {
         }
         "#;
         let mut result = self.db.query(query).bind(("uid", uid)).await?;
-        result.take::<Option<_>>(1)?.found()
+        let lobby = result
+            .take::<Option<RawLobbyWithSessions<_>>>(1)?
+            .found()?
+            .convert_id()?;
+        Ok(lobby)
     }
 
     pub async fn extend(&self, uid: u64, until: DateTime<Utc>) -> DbResult<()> {
@@ -212,7 +303,11 @@ impl SessionRepository {
         }
         "#;
         let mut result = self.db.query(query).bind(("aid", aid)).await?;
-        result.take::<Option<_>>(1)?.found()
+        let lobby = result
+            .take::<Option<RawLobbyWithSessions<_>>>(1)?
+            .found()?
+            .convert_id()?;
+        Ok(lobby)
     }
 
     /// Active -> Expired
@@ -262,7 +357,11 @@ impl SessionRepository {
             .bind(("uid", uid))
             .bind(("uploading", uploading))
             .await?;
-        result.take::<Option<_>>(1)?.found()
+        let lobby = result
+            .take::<Option<RawLobbyWithSessions<_>>>(1)?
+            .found()?
+            .convert_id()?;
+        Ok(lobby)
     }
 
     /// Uploading -> Accepted
@@ -391,11 +490,12 @@ impl SessionRepository {
         let now = Utc::now();
         let until = now.add(mode.time_limit(round));
         let active = SessionState::Active { until };
-        let kind = mode.submission_kind(round);
+        let last = round == mode.last_round();
         let session = Session {
             started_at: now,
             round,
-            kind,
+            mode,
+            last,
             state: active,
         };
         let query = r#"
@@ -428,7 +528,11 @@ impl SessionRepository {
             .bind(("round", round))
             .bind(("session_content", session))
             .await?;
-        result.take::<Option<_>>(3)?.found()
+        let lobby = result
+            .take::<Option<RawLobbyWithSessions<_>>>(3)?
+            .found()?
+            .convert_id()?;
+        Ok(lobby)
     }
 
     /// -> Active
@@ -443,11 +547,12 @@ impl SessionRepository {
         let round = 0;
         let until = now.add(mode.time_limit(round));
         let active = SessionState::Active { until };
-        let kind = mode.submission_kind(round);
+        let last = round == mode.last_round();
         let session = Session {
             started_at: now,
             round: 0,
-            kind,
+            mode,
+            last,
             state: active,
         };
         let lobby = Lobby {
@@ -466,7 +571,7 @@ impl SessionRepository {
                 SELECT
                     out AS lobby,
                     $user_session AS active,
-                    out<-(sessions WHERE state.type IS "Accepted") AS accepted
+                    out<-(sessions WHERE state.type IS "Accepted") AS accepted,
                 FROM $user_session
                 FETCH lobby, accepted
             )
@@ -479,7 +584,11 @@ impl SessionRepository {
             .bind(("lobby_content", lobby))
             .bind(("session_content", session))
             .await?;
-        result.take::<Option<_>>(3)?.found()
+        let lobby = result
+            .take::<Option<RawLobbyWithSessions<_>>>(3)?
+            .found()?
+            .convert_id()?;
+        Ok(lobby)
     }
 
     pub async fn active_users(&self) -> DbResult<Vec<u64>> {

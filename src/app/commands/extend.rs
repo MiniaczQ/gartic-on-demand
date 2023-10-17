@@ -1,5 +1,5 @@
 use crate::app::{
-    error::ConvertError, response::ResponseContext, util::show_round, AppContext, AppError,
+    error::ConvertError, response::ResponseContext, util::respond_with_prompt, AppContext, AppError,
 };
 use chrono::Utc;
 use rossbot::services::{
@@ -28,6 +28,6 @@ async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(
     sr.extend(uid, until)
         .await
         .map_internal("Failed to extend timer")?;
-    show_round(rsx, &ctx, &lobby, true).await?;
+    respond_with_prompt(rsx, &ctx, &lobby, true).await?;
     Ok(())
 }

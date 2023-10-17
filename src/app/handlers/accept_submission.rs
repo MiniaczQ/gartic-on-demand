@@ -3,7 +3,8 @@ use crate::app::{
     config::CONFIG,
     error::{ConvertError, OptionEmptyError},
     permission::has_mod,
-    util::{fetch_raw_image_from_attachment, raw_image_to_attachment, session_destination},
+    renderer::Renderer,
+    util::{fetch_raw_image_from_attachment, raw_image_to_attachment},
 };
 use async_trait::async_trait;
 use poise::{Event, FrameworkContext};
@@ -12,7 +13,6 @@ use rossbot::services::{
 };
 use serenity::prelude::Context;
 use std::cmp::Ordering;
-use tracing::info;
 
 #[derive(Debug)]
 pub struct AcceptSubmission;
@@ -60,35 +60,56 @@ impl AssetHandler for AcceptSubmission {
                     .await
                     .map_internal("Failed to get pending session")?;
 
-                let channel = if !accepted {
-                    CONFIG.channels.rejects
-                } else {
-                    session_destination(&lobby)
-                };
-
                 let old_message = add_reaction.message(&ctx).await?;
-                let raw_image = fetch_raw_image_from_attachment(&old_message.attachments[0])
-                    .await
-                    .ok_or(AppError::internal(
-                        OptionEmptyError,
-                        "Failed to fetch image",
-                    ))?;
-
-                let attachment = raw_image_to_attachment(raw_image.into());
-                info!("{:?}", &old_message.embeds);
-                let new_message = channel
-                    .send_message(ctx, |m| {
-                        m.add_file(attachment).content(&old_message.content)
-                    })
-                    .await?;
+                let old_attachment = &old_message.attachments[0];
 
                 let uid = user.id.0;
-                let new_aid = new_message.id.0;
-                match accepted {
-                    true => sr.accept_pending(uid, old_aid, new_aid).await,
-                    false => sr.reject_pending(uid, old_aid, new_aid).await,
+
+                if accepted {
+                    let (channel, attachment, content) = if lobby.active.last {
+                        let channel = match lobby.lobby.nsfw {
+                            true => CONFIG.channels.complete_nsfw,
+                            false => CONFIG.channels.complete,
+                        };
+                        let attachment = lobby
+                            .active
+                            .mode
+                            .render_complete(&ctx, &lobby, &data.get(), old_attachment)
+                            .await?;
+                        let content = lobby.description_short();
+                        (channel, attachment, content)
+                    } else {
+                        let channel = match lobby.lobby.nsfw {
+                            true => CONFIG.channels.partial_nsfw,
+                            false => CONFIG.channels.partial,
+                        };
+                        let attachment = lobby.active.mode.render_partial(old_attachment).await?;
+                        let content = lobby.description_short();
+                        (channel, attachment, content)
+                    };
+                    let new_message = channel
+                        .send_message(ctx, |m| m.add_file(attachment).content(content))
+                        .await?;
+                    sr.accept_pending(uid, old_aid, new_message.id.0)
+                        .await
+                        .map_internal("Failed to accept/reject session")?;
+                } else {
+                    let channel = CONFIG.channels.rejects;
+                    let raw_image = fetch_raw_image_from_attachment(old_attachment)
+                        .await
+                        .ok_or(AppError::internal(
+                            OptionEmptyError,
+                            "Failed to fetch image",
+                        ))?;
+                    let attachment = raw_image_to_attachment(raw_image.into());
+                    let content = lobby.description_short();
+                    let new_message = channel
+                        .send_message(ctx, |m| m.add_file(attachment).content(content))
+                        .await?;
+                    sr.reject_pending(uid, old_aid, new_message.id.0)
+                        .await
+                        .map_internal("Failed to accept/reject session")?;
                 }
-                .map_internal("Failed to accept/reject session")?;
 
                 old_message.delete(&ctx).await?;
 
