@@ -177,47 +177,10 @@ pub struct LobbyWithSessions<S> {
     pub active: TypedSession<S>,
 }
 
-impl<S> LobbyWithSessions<S> {
-    pub fn round(&self) -> u64 {
-        self.accepted.len() as u64
-    }
-
-    pub fn description_short(&self) -> String {
-        let sfw: &str = if self.lobby.nsfw { "NSFW " } else { "" };
-        let content = format!(
-            "<@{}> - {}{:?} mode - round {}",
-            self.active.who,
-            sfw,
-            self.lobby.mode,
-            self.active.round + 1,
-        );
-        content
-    }
-
-    pub fn description_long(&self) -> String {
-        let sfw: &str = if self.lobby.nsfw { "NSFW " } else { "" };
-        let attribute_authors = self
-            .accepted
-            .iter()
-            .map(|a| format!("<@{}>", a.who))
-            .collect::<Vec<_>>();
-        let attribute_authors = attribute_authors.join(", ");
-        let content = format!(
-            "<@{}> - {}{:?} mode - round {}\nAttributes by: {}",
-            self.active.who,
-            sfw,
-            self.lobby.mode,
-            self.active.round + 1,
-            attribute_authors
-        );
-        content
-    }
-}
-
 impl LobbyWithSessions<Active> {
     pub fn prompt(&self, in_progress: bool) -> String {
         let mode = self.lobby.mode;
-        let round = self.round();
+        let round = self.active.round;
         let in_progress = if in_progress {
             "Already in progress.\n"
         } else {

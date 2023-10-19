@@ -3,7 +3,7 @@ use crate::app::{
     config::CONFIG,
     error::{ConvertError, OptionEmptyError},
     permission::has_mod,
-    renderer::Renderer,
+    rendering::{LobbyRenderer, ModeRenderer},
     util::{fetch_raw_image_from_attachment, raw_image_to_attachment},
 };
 use async_trait::async_trait;
@@ -74,17 +74,21 @@ impl AssetHandler for AcceptSubmission {
                         let attachment = lobby
                             .active
                             .mode
-                            .render_complete(&ctx, &lobby, &data.get(), old_attachment)
+                            .render_complete_image(&ctx, &lobby, &data.get(), old_attachment)
                             .await?;
-                        let content = lobby.description_long();
+                        let content = lobby.render_complete_text();
                         (channel, attachment, content)
                     } else {
                         let channel = match lobby.lobby.nsfw {
                             true => CONFIG.channels.partial_nsfw,
                             false => CONFIG.channels.partial,
                         };
-                        let attachment = lobby.active.mode.render_partial(old_attachment).await?;
-                        let content = lobby.description_short();
+                        let attachment = lobby
+                            .active
+                            .mode
+                            .render_partial_image(old_attachment)
+                            .await?;
+                        let content = lobby.render_partial_text();
                         (channel, attachment, content)
                     };
                     let new_message = channel
@@ -102,7 +106,7 @@ impl AssetHandler for AcceptSubmission {
                             "Failed to fetch image",
                         ))?;
                     let attachment = raw_image_to_attachment(raw_image.into());
-                    let content = lobby.description_short();
+                    let content = lobby.render_partial_text();
                     let new_message = channel
                         .send_message(ctx, |m| m.add_file(attachment).content(content))
                         .await?;

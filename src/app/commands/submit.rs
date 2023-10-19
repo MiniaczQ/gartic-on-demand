@@ -1,6 +1,11 @@
 use crate::app::{
-    config::CONFIG, error::ConvertError, permission::is_trusted, renderer::Renderer,
-    response::ResponseContext, util::respond_with_prompt, AppContext, AppError,
+    config::CONFIG,
+    error::ConvertError,
+    permission::is_trusted,
+    rendering::{LobbyRenderer, ModeRenderer},
+    response::ResponseContext,
+    util::respond_with_prompt,
+    AppContext, AppError,
 };
 use poise::serenity_prelude::{Attachment, ReactionType};
 use rossbot::services::{
@@ -46,17 +51,17 @@ async fn process(
             let attachment = lobby
                 .active
                 .mode
-                .render_complete(&ctx, &lobby, &ctx.data().get(), &attachment)
+                .render_complete_image(&ctx, &lobby, &ctx.data().get(), &attachment)
                 .await?;
-            let content = lobby.description_long();
+            let content = lobby.render_complete_text();
             (channel, attachment, content)
         } else {
             let channel = match lobby.lobby.nsfw {
                 true => CONFIG.channels.partial_nsfw,
                 false => CONFIG.channels.partial,
             };
-            let attachment = lobby.active.mode.render_partial(&attachment).await?;
-            let content = lobby.description_short();
+            let attachment = lobby.active.mode.render_partial_image(&attachment).await?;
+            let content = lobby.render_partial_text();
             (channel, attachment, content)
         };
 
@@ -68,8 +73,8 @@ async fn process(
             .map_internal("Failed to attach image")?;
     } else {
         let channel = CONFIG.channels.moderation;
-        let attachment = lobby.active.mode.render_partial(&attachment).await?;
-        let content = lobby.description_short();
+        let attachment = lobby.active.mode.render_partial_image(&attachment).await?;
+        let content = lobby.render_partial_text();
         let message = channel
             .send_message(ctx, |m| {
                 m.add_file(attachment).content(content).reactions([
@@ -90,7 +95,7 @@ async fn process(
         rsx.respond(|b| b.content("This was the final round.\nUse `/start` to play again."))
             .await?;
     } else {
-        let next_round = lobby.round() + 1;
+        let next_round = lobby.active.round + 1;
         let maybe_lobby = sr
             .find_attach(uid, lobby.lobby.mode, next_round, lobby.lobby.nsfw)
             .await;

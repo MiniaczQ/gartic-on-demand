@@ -19,51 +19,54 @@ use super::{
 };
 
 #[async_trait]
-pub trait Renderer {
-    async fn render_prompt(
+pub trait ModeRenderer {
+    async fn render_prompt_image(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
         lobby: &LobbyWithSessions<Active>,
         ir: &ImageRepository,
     ) -> Result<AttachmentType<'static>, AppError>;
 
-    async fn render_partial(
+    async fn render_partial_image(
         &self,
         attachment: &Attachment,
     ) -> Result<AttachmentType<'static>, AppError>;
 
-    async fn render_complete<T: Send + Sync>(
+    async fn render_complete_image<T: Send + Sync>(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
         lobby: &LobbyWithSessions<T>,
         ir: &ImageRepository,
         attachment: &Attachment,
     ) -> Result<AttachmentType<'static>, AppError>;
+
+    fn render_partial_author(&self, author: u64) -> String;
+    fn render_complete_authors(&self, author: u64, others: &[u64]) -> String;
 }
 
 #[async_trait]
-impl Renderer for Mode {
-    async fn render_prompt(
+impl ModeRenderer for Mode {
+    async fn render_prompt_image(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
         lobby: &LobbyWithSessions<Active>,
         ir: &ImageRepository,
     ) -> Result<AttachmentType<'static>, AppError> {
         match &self {
-            Mode::Ross => Ross.render_prompt(ctx, lobby, ir).await,
+            Mode::Ross => Ross.render_prompt_image(ctx, lobby, ir).await,
         }
     }
 
-    async fn render_partial(
+    async fn render_partial_image(
         &self,
         attachment: &Attachment,
     ) -> Result<AttachmentType<'static>, AppError> {
         match &self {
-            Mode::Ross => Ross.render_partial(attachment).await,
+            Mode::Ross => Ross.render_partial_image(attachment).await,
         }
     }
 
-    async fn render_complete<T: Send + Sync>(
+    async fn render_complete_image<T: Send + Sync>(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
         lobby: &LobbyWithSessions<T>,
@@ -71,14 +74,26 @@ impl Renderer for Mode {
         attachment: &Attachment,
     ) -> Result<AttachmentType<'static>, AppError> {
         match &self {
-            Mode::Ross => Ross.render_complete(ctx, lobby, ir, attachment).await,
+            Mode::Ross => Ross.render_complete_image(ctx, lobby, ir, attachment).await,
+        }
+    }
+
+    fn render_partial_author(&self, author: u64) -> String {
+        match &self {
+            Mode::Ross => Ross.render_partial_author(author),
+        }
+    }
+
+    fn render_complete_authors(&self, author: u64, others: &[u64]) -> String {
+        match &self {
+            Mode::Ross => Ross.render_complete_authors(author, others),
         }
     }
 }
 
 #[async_trait]
-impl Renderer for Ross {
-    async fn render_prompt(
+impl ModeRenderer for Ross {
+    async fn render_prompt_image(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
         lobby: &LobbyWithSessions<Active>,
@@ -92,7 +107,7 @@ impl Renderer for Ross {
         Ok(attachment)
     }
 
-    async fn render_partial(
+    async fn render_partial_image(
         &self,
         attachment: &Attachment,
     ) -> Result<AttachmentType<'static>, AppError> {
@@ -107,7 +122,7 @@ impl Renderer for Ross {
         Ok(attachment)
     }
 
-    async fn render_complete<T: Send + Sync>(
+    async fn render_complete_image<T: Send + Sync>(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
         lobby: &LobbyWithSessions<T>,
@@ -125,5 +140,52 @@ impl Renderer for Ross {
             filename: "complete.png".to_owned(),
         };
         Ok(attachment)
+    }
+
+    fn render_partial_author(&self, author: u64) -> String {
+        format!("<@{}>", author)
+    }
+
+    fn render_complete_authors(&self, author: u64, others: &[u64]) -> String {
+        let others = others
+            .iter()
+            .map(|author| format!("<@{}>", author))
+            .collect::<Vec<_>>();
+        let others = others.join(", ");
+        format!("<@{}>, attributes by {}", author, others)
+    }
+}
+
+pub trait LobbyRenderer {
+    fn render_partial_text(&self) -> String;
+    fn render_complete_text(&self) -> String;
+}
+
+impl<T> LobbyRenderer for LobbyWithSessions<T> {
+    fn render_partial_text(&self) -> String {
+        let sfw: &str = if self.lobby.nsfw { "NSFW " } else { "" };
+        let content = format!(
+            "{}{:?} mode round {} by {}",
+            sfw,
+            self.active.mode,
+            self.active.round + 1,
+            self.active.mode.render_partial_author(self.active.who)
+        );
+        content
+    }
+
+    fn render_complete_text(&self) -> String {
+        let sfw: &str = if self.lobby.nsfw { "NSFW " } else { "" };
+        let others = self.accepted.iter().map(|a| a.who).collect::<Vec<_>>();
+        let content = format!(
+            "{}{:?} mode round {} by {}",
+            sfw,
+            self.active.mode,
+            self.active.round + 1,
+            self.active
+                .mode
+                .render_complete_authors(self.active.who, &others)
+        );
+        content
     }
 }

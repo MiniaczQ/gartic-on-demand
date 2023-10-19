@@ -1,7 +1,7 @@
 use super::{
     config::CONFIG,
     error::{AppError, ConvertError},
-    renderer::Renderer,
+    rendering::ModeRenderer,
     response::ResponseContext,
     AppContext,
 };
@@ -124,7 +124,7 @@ pub async fn respond_with_prompt(
     let attachment = lobby
         .active
         .mode
-        .render_prompt(ctx, lobby, &ctx.data().get())
+        .render_prompt_image(ctx, lobby, &ctx.data().get())
         .await?;
     rsx.purge().await?;
     rsx.respond(|f| f.attachment(attachment).content(lobby.prompt(in_progress)))
