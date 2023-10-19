@@ -7,7 +7,7 @@ use rossbot::services::{
         assets::ImageRepository,
         session::{Active, LobbyWithSessions},
     },
-    gamemodes::Mode,
+    gamemodes::{ross::Ross, Mode},
     image_processing::{concat_vertical, normalize_image_aoi, RgbaConvert},
 };
 use serenity::http::Http;
@@ -43,6 +43,41 @@ pub trait Renderer {
 
 #[async_trait]
 impl Renderer for Mode {
+    async fn render_prompt(
+        &self,
+        ctx: &(impl AsRef<Http> + Send + Sync),
+        lobby: &LobbyWithSessions<Active>,
+        ir: &ImageRepository,
+    ) -> Result<AttachmentType<'static>, AppError> {
+        match &self {
+            Mode::Ross => Ross.render_prompt(ctx, lobby, ir).await,
+        }
+    }
+
+    async fn render_partial(
+        &self,
+        attachment: &Attachment,
+    ) -> Result<AttachmentType<'static>, AppError> {
+        match &self {
+            Mode::Ross => Ross.render_partial(attachment).await,
+        }
+    }
+
+    async fn render_complete<T: Send + Sync>(
+        &self,
+        ctx: &(impl AsRef<Http> + Send + Sync),
+        lobby: &LobbyWithSessions<T>,
+        ir: &ImageRepository,
+        attachment: &Attachment,
+    ) -> Result<AttachmentType<'static>, AppError> {
+        match &self {
+            Mode::Ross => Ross.render_complete(ctx, lobby, ir, attachment).await,
+        }
+    }
+}
+
+#[async_trait]
+impl Renderer for Ross {
     async fn render_prompt(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
