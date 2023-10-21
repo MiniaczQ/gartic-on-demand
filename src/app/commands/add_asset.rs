@@ -21,8 +21,8 @@ pub enum AssetKindArg {
 #[poise::command(slash_command, guild_only)]
 pub async fn add_asset(
     ctx: AppContext<'_>,
-    attachment: Attachment,
-    kind: AssetKindArg,
+    #[description = "Asset"] attachment: Attachment,
+    #[description = "Asset kind"] kind: AssetKindArg,
 ) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);
     rsx.init().await?;

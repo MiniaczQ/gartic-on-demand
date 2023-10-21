@@ -220,18 +220,7 @@ impl SessionRepository {
         LET $user_session = SELECT * FROM ONLY sessions
             WHERE meta::id(in) Is $uid
             AND state.type IS "Active";
-        RETURN IF $user_session IS NONE {
-            RETURN []
-        } ELSE {
-            RETURN (
-                SELECT
-                    out AS lobby,
-                    $user_session AS active,
-                    out<-(sessions WHERE state.type IS "Accepted") AS accepted
-                FROM $user_session
-                FETCH lobby, accepted
-            )
-        }
+        fn::extract_lobby($user_session)
         "#;
         let mut result = self.db.query(query).bind(("uid", uid)).await?;
         let lobby = result
@@ -263,18 +252,7 @@ impl SessionRepository {
         LET $user_session = SELECT * FROM ONLY sessions
             WHERE state.what = $aid
             AND state.type = "Pending";
-        RETURN IF $user_session IS NONE {
-            RETURN []
-        } ELSE {
-            RETURN (
-                SELECT
-                    out AS lobby,
-                    $user_session AS active,
-                    out<-(sessions WHERE state.type IS "Accepted") AS accepted
-                FROM $user_session
-                FETCH lobby, accepted
-            )
-        }
+        fn::extract_lobby($user_session)
         "#;
         let mut result = self.db.query(query).bind(("aid", aid)).await?;
         let lobby = result
@@ -312,18 +290,7 @@ impl SessionRepository {
             SET state = $uploading
             WHERE meta::id(in) IS $uid
             AND state.type IS "Active";
-        RETURN IF $user_session IS NONE {
-            RETURN []
-        } ELSE {
-            RETURN (
-                SELECT
-                    out AS lobby,
-                    $user_session AS active,
-                    out<-(sessions WHERE state.type IS "Accepted") AS accepted
-                FROM $user_session
-                FETCH lobby, accepted
-            )
-        }
+        fn::extract_lobby($user_session)
         "#;
         let mut result = self
             .db
@@ -441,9 +408,9 @@ impl SessionRepository {
         let cancelled = SessionState::Cancelled { when: now };
         let query = r#"
         UPDATE sessions
-        SET state = $cancelled
-        WHERE meta::id(in) IS $uid
-        AND state.type IS "Active"
+            SET state = $cancelled
+            WHERE meta::id(in) IS $uid
+            AND state.type IS "Active"
         "#;
         self.db
             .query(query)
@@ -460,6 +427,7 @@ impl SessionRepository {
         mode: Mode,
         round: u64,
         nsfw: bool,
+        allow_repeats: bool,
     ) -> DbResult<LobbyWithSessions<Active>> {
         info!(uid = uid, mode = ?mode, round = round, "Find attach");
         let now = Utc::now();
@@ -474,29 +442,17 @@ impl SessionRepository {
             nsfw,
             state: active,
         };
-        // AND array::any(id<-(sessions WHERE in IS $user AND state.type NOT IN ["Cancelled", "Expired"])) IS false
         let query = r#"
         LET $user = type::thing("users", $uid);
         LET $lobby = SELECT * FROM ONLY lobbies
             WHERE mode = $mode
-            
+            AND ($allow_repeats OR (array::any(id<-(sessions WHERE in IS $user AND state.type NOT IN ["Cancelled", "Expired"])) IS false))
             AND array::any(id<-(sessions WHERE state.type IN ["Active", "Uploading", "Pending"])) IS false
             AND array::len(id<-(sessions WHERE state.type IS "Accepted")) = $round
             AND nsfw IS $nsfw
             ORDER BY rand() LIMIT 1;
         LET $user_session = RELATE ONLY $user->sessions->($lobby.id) CONTENT $session_content;
-        RETURN IF $user_session IS NONE {
-            RETURN []
-        } ELSE {
-            RETURN (
-                SELECT
-                    out AS lobby,
-                    $user_session AS active,
-                    out<-(sessions WHERE state.type IS "Accepted") AS accepted
-                FROM ONLY $user_session
-                FETCH lobby, accepted
-            )
-        }
+        fn::extract_lobby($user_session)
         "#;
         let mut result = self
             .db
@@ -506,6 +462,7 @@ impl SessionRepository {
             .bind(("round", round))
             .bind(("nsfw", nsfw))
             .bind(("session_content", session))
+            .bind(("allow_repeats", allow_repeats))
             .await?;
         let lobby = result
             .take::<Option<RawLobbyWithSessions<_>>>(3)?
@@ -544,18 +501,7 @@ impl SessionRepository {
         LET $user = type::thing("users", $uid);
         LET $lobby = CREATE ONLY lobbies CONTENT $lobby_content;
         LET $user_session = RELATE ONLY $user->sessions->($lobby.id) CONTENT $session_content;
-        RETURN IF $user_session IS NONE {
-            RETURN []
-        } ELSE {
-            RETURN (
-                SELECT
-                    out AS lobby,
-                    $user_session AS active,
-                    out<-(sessions WHERE state.type IS "Accepted") AS accepted
-                FROM $user_session
-                FETCH lobby, accepted
-            )
-        }
+        fn::extract_lobby($user_session)
         "#;
         let mut result = self
             .db
