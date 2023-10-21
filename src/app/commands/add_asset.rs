@@ -2,7 +2,7 @@ use crate::app::{
     config::CONFIG, error::ConvertError, permission::has_admin, response::ResponseContext,
     util::fetch_image_from_attachment, AppContext, AppError,
 };
-use poise::serenity_prelude::{Attachment, AttachmentType, ChannelId, ReactionType};
+use poise::serenity_prelude::{Attachment, AttachmentType, ChannelId, ReactionType, UserId};
 use rossbot::services::{
     database::assets::{Asset, AssetKind, ImageRepository},
     image_processing::{normalize_image, RgbaConvert},
@@ -23,10 +23,11 @@ pub async fn add_asset(
     ctx: AppContext<'_>,
     #[description = "Asset"] attachment: Attachment,
     #[description = "Asset kind"] kind: AssetKindArg,
+    #[description = "Asset author"] author: UserId,
 ) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);
     rsx.init().await?;
-    if let Err(e) = process(&mut rsx, ctx, attachment, kind).await {
+    if let Err(e) = process(&mut rsx, ctx, attachment, kind, author).await {
         error!(error = ?e);
         rsx.respond(|b| b.content(e.for_user())).await?
     }
@@ -39,6 +40,7 @@ async fn process(
     ctx: AppContext<'_>,
     attachment: Attachment,
     kind: AssetKindArg,
+    author: UserId,
 ) -> Result<(), AppError> {
     let user = ctx.author();
     has_admin(&ctx, user).await?;
@@ -56,13 +58,13 @@ async fn process(
     let message = kind_to_channel(kind)
         .send_message(ctx, |m| {
             m.add_file(image)
-                .content(format!("<@{}>", user.id))
+                .content(format!("Created by <@{}>, added by <@{}>", author.0, user.id.0))
                 .reactions([ReactionType::Unicode(CONFIG.reactions.delete.clone())])
         })
         .await?;
 
     let ir: ImageRepository = ctx.data().get();
-    ir.create(message.id.0, Asset::new(kind, user.id.0))
+    ir.create(message.id.0, Asset::new(kind, user.id.0, author.0))
         .await
         .map_internal("Failed to add image to database")?;
 

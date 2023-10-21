@@ -14,14 +14,16 @@ pub enum AssetKind {
 pub struct Asset {
     pub kind: AssetKind,
     pub author: u64,
+    pub submitter: u64,
     pub created_at: DateTime<Utc>,
 }
 
 impl Asset {
-    pub fn new(kind: AssetKind, uid: u64) -> Self {
+    pub fn new(kind: AssetKind, uid: u64, aid: u64) -> Self {
         Self {
             kind,
             author: uid,
+            submitter: aid,
             created_at: Utc::now(),
         }
     }
