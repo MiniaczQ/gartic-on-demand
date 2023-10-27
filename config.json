@@ -29,7 +29,9 @@
         "height": 424
     },
     "log": {
-        "directives": "warn,rossbot=trace,surrealdb=debug,rossbot::app::stats_printer=error"
+        "directives": "warn,rossbot=trace,surrealdb=debug,rossbot::app::stats_printer=error",
+        "console": true,
+        "json": "logs"
     },
     "database": {
         "address": "ws://127.0.0.1:8000",

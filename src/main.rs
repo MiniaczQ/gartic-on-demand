@@ -29,7 +29,7 @@ async fn on_error(error: poise::FrameworkError<'_, AppData, AppError>) {
     }
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() {
     app::log::setup();
     let options = options();
