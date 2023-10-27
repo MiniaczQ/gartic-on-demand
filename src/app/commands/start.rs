@@ -33,7 +33,7 @@ pub async fn start(
 ) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);
     rsx.init().await?;
-    if let Err(e) = process(&mut rsx, ctx, mode, None, nsfw, None).await {
+    if let Err(e) = process(&mut rsx, ctx, mode, None, nsfw).await {
         error!(error = ?e);
         rsx.respond(|b| b.content(e.for_user())).await?
     }
@@ -47,14 +47,12 @@ async fn process(
     mode: GameArg,
     round: Option<u64>,
     nsfw: Option<bool>,
-    allow_repeats: Option<bool>,
 ) -> Result<(), AppError> {
     let sr: SessionRepository = ctx.data().get();
     let user = ctx.author();
     let uid = user.id.0;
     let round = round.unwrap_or(1).sub(1);
     let nsfw = nsfw.unwrap_or(false);
-    let allow_repeats = allow_repeats.unwrap_or(false);
 
     if nsfw && !is_adult(&ctx, user).await? {
         rsx.respond(|b| b.content("You need the `+18` role to participate in NSFW games."))
@@ -77,7 +75,7 @@ async fn process(
         return respond_with_prompt(rsx, &ctx, &lobby, true).await;
     }
 
-    let lobby = find_or_create_session(sr, uid, mode, round, nsfw, allow_repeats).await?;
+    let lobby = find_or_create_session(sr, uid, mode, round, nsfw).await?;
     respond_with_prompt(rsx, &ctx, &lobby, false).await?;
     let waker: StatusUpdateWaker = ctx.data().get();
     waker.wake();
@@ -90,7 +88,6 @@ async fn find_or_create_session(
     mode: GameArg,
     round: u64,
     nsfw: bool,
-    allow_repeats: bool,
 ) -> Result<LobbyWithSessions<Active>, AppError> {
     let mode = map_game(mode);
 
@@ -98,7 +95,7 @@ async fn find_or_create_session(
         None.map_user("Gamemode does not support this many rounds")?;
     }
 
-    let maybe_lobby = sr.find_attach(uid, mode, round, nsfw, allow_repeats).await;
+    let maybe_lobby = sr.find_attach(uid, mode, round, nsfw, false).await;
     let lobby = match (maybe_lobby, round) {
         (Ok(lobby), _) => lobby,
         (Err(DbError::NotFound), 0) => sr

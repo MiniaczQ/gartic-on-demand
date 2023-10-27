@@ -18,11 +18,10 @@ use tracing::error;
 pub async fn submit(
     ctx: AppContext<'_>,
     #[description = "Your submission"] attachment: Attachment,
-    #[description = "Whether to find games where you already played"] allow_repeats: Option<bool>,
 ) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);
     rsx.init().await?;
-    if let Err(e) = process(&mut rsx, ctx, attachment, allow_repeats).await {
+    if let Err(e) = process(&mut rsx, ctx, attachment).await {
         error!(error = ?e);
         rsx.respond(|b| b.content(e.for_user())).await?
     }
@@ -34,12 +33,10 @@ async fn process(
     rsx: &mut ResponseContext<'_>,
     ctx: AppContext<'_>,
     attachment: Attachment,
-    allow_repeats: Option<bool>,
 ) -> Result<(), AppError> {
     let sr: SessionRepository = ctx.data().get();
     let user = ctx.author();
     let uid = user.id.0;
-    let allow_repeats = allow_repeats.unwrap_or(false);
 
     let lobby = sr
         .start_submitting(uid)
@@ -102,16 +99,11 @@ async fn process(
             .await?;
     } else {
         let next_round = lobby.active.round + 1;
-        let maybe_lobby = sr
-            .find_attach(
-                uid,
-                lobby.lobby.mode,
-                next_round,
-                lobby.lobby.nsfw,
-                allow_repeats,
-            )
-            .await;
-        if let Ok(lobby) = maybe_lobby {
+        let mode = lobby.lobby.mode;
+        let nsfw = lobby.lobby.nsfw;
+        if let Ok(lobby) = sr.find_attach(uid, mode, next_round, nsfw, false).await {
+            respond_with_prompt(rsx, &ctx, &lobby, false).await?;
+        } else if let Ok(lobby) = sr.find_attach(uid, mode, next_round, nsfw, true).await {
             respond_with_prompt(rsx, &ctx, &lobby, false).await?;
         } else {
             rsx.respond(|b| {
