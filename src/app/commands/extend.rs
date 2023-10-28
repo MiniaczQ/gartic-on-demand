@@ -3,7 +3,9 @@ use crate::app::{
 };
 use chrono::Utc;
 use rossbot::services::{
-    database::session::SessionRepository, gamemodes::GameLogic, provider::Provider,
+    database::session::{Active, SessionRepository},
+    gamemodes::GameLogic,
+    provider::Provider,
 };
 use tracing::error;
 
@@ -23,9 +25,10 @@ pub async fn extend(ctx: AppContext<'_>) -> Result<(), AppError> {
 async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
     let sr: SessionRepository = ctx.data().get();
     let uid = ctx.author().id.0;
-    let lobby = sr.get(uid).await.map_user("No active game session")?;
-    let until = Utc::now() + lobby.lobby.mode.time_limit(lobby.active.round);
-    sr.extend(uid, until)
+    let mut lobby = sr.get(uid).await.map_user("No active game session")?;
+    let new_until = Utc::now() + lobby.lobby.mode.time_limit(lobby.active.round);
+    lobby.active.state.until = new_until;
+    sr.extend(uid, new_until)
         .await
         .map_internal("Failed to extend timer")?;
     respond_with_prompt(rsx, &ctx, &lobby, true).await?;
