@@ -58,7 +58,10 @@ async fn process(
     let message = kind_to_channel(kind)
         .send_message(ctx, |m| {
             m.add_file(image)
-                .content(format!("Created by <@{}>, added by <@{}>", author.0, user.id.0))
+                .content(format!(
+                    "Created by <@{}>, added by <@{}>",
+                    author.0, user.id.0
+                ))
                 .reactions([ReactionType::Unicode(CONFIG.reactions.delete.clone())])
         })
         .await?;

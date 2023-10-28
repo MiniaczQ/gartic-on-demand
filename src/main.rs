@@ -4,7 +4,10 @@ use app::{
     commands,
     config::CONFIG,
     error::AppError,
-    handlers::{accept_submission::AcceptSubmission, remove_asset::RemoveAsset, AssetHandler},
+    handlers::{
+        accept_submission::AcceptSubmission, notify_activity::NotifyActivity,
+        remove_asset::RemoveAsset, AssetHandler,
+    },
     stats_printer::StatsPrinter,
     AppData,
 };
@@ -72,7 +75,7 @@ fn event_handler<'a>(
     let event = event.clone();
     let data = data.clone();
     Box::pin(async move {
-        let handlers: &[&dyn AssetHandler] = &[&RemoveAsset, &AcceptSubmission];
+        let handlers: &[&dyn AssetHandler] = &[&RemoveAsset, &AcceptSubmission, &NotifyActivity];
         for handler in handlers {
             if let Err(e) = handler.handle(&ctx, &event, fcx, &data).await {
                 error!(error = %e, handler = ?handler, "Error in handler");

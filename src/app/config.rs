@@ -2,6 +2,7 @@ use crate::app::log::LogConfig;
 use config::{Config, Environment, File, FileFormat};
 use dotenv::dotenv;
 use lazy_static::lazy_static;
+use poise::serenity_prelude::MessageId;
 use rossbot::services::database::DatabaseConfig;
 use serde::{de::DeserializeOwned, Deserialize};
 use serenity::model::prelude::{ChannelId, GuildId, RoleId};
@@ -28,6 +29,7 @@ pub struct AppConfig {
     pub channels: Channels,
     pub roles: Roles,
     pub reactions: Reactions,
+    pub messages: Messages,
     pub image: Image,
     pub log: LogConfig,
     pub database: DatabaseConfig,
@@ -52,6 +54,7 @@ pub struct Roles {
     pub moderator: RoleId,
     pub trusted: RoleId,
     pub adult: RoleId,
+    pub notify: RoleId,
 }
 
 #[derive(Debug, Deserialize)]
@@ -66,4 +69,9 @@ pub struct Reactions {
 pub struct Image {
     pub width: u32,
     pub height: u32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Messages {
+    pub notify: MessageId,
 }

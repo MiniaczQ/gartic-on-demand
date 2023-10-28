@@ -44,6 +44,8 @@ impl StatsPrinter {
             .send_message(&self.ctx, |b| b.embed(|b| b.description("Setting up...")))
             .await?;
 
+        let mut activity = None;
+
         loop {
             info!("Updating stats printer");
             self.sr
@@ -51,11 +53,34 @@ impl StatsPrinter {
                 .await
                 .map_internal("Failed to stop expired sessions")?;
 
-            let mut active = self
+            let active = self
                 .sr
                 .active_users()
                 .await
-                .map_internal("Failed to fetch active users")?
+                .map_internal("Failed to fetch active users")?;
+
+            match (active.is_empty(), &activity) {
+                (false, None) => {
+                    let now = Utc::now();
+                    let content = format!(
+                        "Activity detected at <t:{}> <@&{}>!",
+                        now.timestamp(),
+                        CONFIG.roles.notify
+                    );
+                    let message = CONFIG
+                        .channels
+                        .stats
+                        .send_message(&self.ctx, |b| b.content(content))
+                        .await?;
+                    activity = Some(message);
+                }
+                (true, Some(message)) => {
+                    message.delete(&self.ctx).await?;
+                }
+                _ => {}
+            }
+
+            let mut active = active
                 .iter()
                 .map(|u| format!("<@{}>", u))
                 .collect::<Vec<_>>()
@@ -91,8 +116,8 @@ impl StatsPrinter {
                     })
                 })
                 .await?;
-            self.sw.wait().await;
             tokio::time::sleep(Duration::from_secs(5)).await;
+            self.sw.wait().await;
         }
     }
 }

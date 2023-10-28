@@ -3,9 +3,7 @@ use crate::app::{
 };
 use chrono::Utc;
 use rossbot::services::{
-    database::session::{Active, SessionRepository},
-    gamemodes::GameLogic,
-    provider::Provider,
+    database::session::SessionRepository, gamemodes::GameLogic, provider::Provider,
 };
 use tracing::error;
 
