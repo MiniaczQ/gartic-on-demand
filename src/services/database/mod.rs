@@ -1,6 +1,7 @@
 pub mod assets;
 pub mod migrations;
 pub mod session;
+pub mod session_v3;
 
 use std::ops::{Deref, DerefMut};
 
