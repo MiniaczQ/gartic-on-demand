@@ -4,7 +4,8 @@ use super::{
     config::CONFIG,
     error::{AppError, ConvertError},
 };
-use chrono::Utc;
+use chrono::{DateTime, Utc};
+use poise::serenity_prelude::Message;
 use rossbot::services::{
     database::{session::SessionRepository, Database},
     provider::Provider,
@@ -17,6 +18,12 @@ pub struct StatsPrinter {
     sr: SessionRepository,
     sw: StatusUpdateWaiter,
     ctx: Context,
+}
+
+enum Activity {
+    Active(Message),
+    Cooldown(DateTime<Utc>),
+    None,
 }
 
 impl StatsPrinter {
@@ -44,7 +51,7 @@ impl StatsPrinter {
             .send_message(&self.ctx, |b| b.embed(|b| b.description("Setting up...")))
             .await?;
 
-        let mut activity = None;
+        let mut activity = Activity::None;
 
         loop {
             info!("Updating stats printer");
@@ -60,7 +67,7 @@ impl StatsPrinter {
                 .map_internal("Failed to fetch active users")?;
 
             match (active.is_empty(), &activity) {
-                (false, None) => {
+                (false, Activity::None) => {
                     let now = Utc::now();
                     let content = format!(
                         "Activity detected at <t:{}> <@&{}>!",
@@ -72,10 +79,16 @@ impl StatsPrinter {
                         .stats
                         .send_message(&self.ctx, |b| b.content(content))
                         .await?;
-                    activity = Some(message);
+                    activity = Activity::Active(message);
                 }
-                (true, Some(message)) => {
+                (true, Activity::Active(message)) => {
                     message.delete(&self.ctx).await?;
+                    activity = Activity::Cooldown(Utc::now() + Duration::from_secs(300));
+                }
+                (false, Activity::Cooldown(until)) => {
+                    if Utc::now() > *until {
+                        activity = Activity::None;
+                    }
                 }
                 _ => {}
             }
