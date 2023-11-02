@@ -3,7 +3,10 @@ pub mod migrations;
 pub mod session;
 pub mod session_v3;
 
-use std::ops::{Deref, DerefMut};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 use serde::{Deserialize, Serialize};
 use surrealdb::{
@@ -126,6 +129,8 @@ pub enum DbError {
     IdConversion(#[from] IdConversionError),
     #[error("{0}")]
     Database(#[from] surrealdb::Error),
+    #[error("{0:?}")]
+    DatabaseCheck(HashMap<usize, surrealdb::Error>),
     #[error("Not found")]
     NotFound,
 }
@@ -139,5 +144,23 @@ pub trait MapToNotFound<T> {
 impl<T> MapToNotFound<T> for Option<T> {
     fn found(self) -> DbResult<T> {
         self.ok_or(DbError::NotFound)
+    }
+}
+
+pub trait BetterCheck
+where
+    Self: Sized,
+{
+    fn better_check(self) -> DbResult<Self>;
+}
+
+impl BetterCheck for surrealdb::Response {
+    fn better_check(mut self) -> DbResult<Self> {
+        let errors = self.take_errors();
+        if errors.is_empty() {
+            Ok(self)
+        } else {
+            Err(DbError::DatabaseCheck(errors))
+        }
     }
 }

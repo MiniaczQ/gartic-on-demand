@@ -4,7 +4,6 @@ use crate::services::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-
 use super::Record;
 
 #[derive(Debug, Serialize)]
@@ -74,14 +73,14 @@ mod tests {
     use super::UserRepository;
     use crate::services::{database::session_v3::tests::db, provider::Provider};
 
-    async fn sut() -> UserRepository {
+    async fn setup() -> UserRepository {
         let db = db().await;
         db.get()
     }
 
     #[tokio::test]
     async fn fail_second_create() {
-        let sut = sut().await;
+        let sut = setup().await;
 
         sut.create_user(0, "a").await.unwrap();
         sut.create_user(0, "a").await.unwrap_err();
@@ -89,14 +88,14 @@ mod tests {
 
     #[tokio::test]
     async fn fail_update_without_create() {
-        let sut = sut().await;
+        let sut = setup().await;
 
         sut.update_user(0, "a").await.unwrap_err();
     }
 
     #[tokio::test]
     async fn succeed_update_after_create() {
-        let sut = sut().await;
+        let sut = setup().await;
 
         sut.create_user(0, "a").await.unwrap();
         sut.update_user(0, "a").await.unwrap();
@@ -104,7 +103,7 @@ mod tests {
 
     #[tokio::test]
     async fn succeed_create_then_update() {
-        let sut = sut().await;
+        let sut = setup().await;
 
         sut.create_or_update_user(0, "a").await.unwrap();
         sut.create_or_update_user(0, "a").await.unwrap();

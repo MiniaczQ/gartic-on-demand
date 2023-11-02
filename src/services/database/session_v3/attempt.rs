@@ -1,9 +1,9 @@
-use super::Record;
+use super::{round::RoundWithAttempts, Record};
 use crate::services::{
     database::{Database, DbResult, MapToNotFound},
     provider::Provider,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -33,7 +33,7 @@ pub struct Pending {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Accepted {
+pub struct Approved {
     pub when: DateTime<Utc>,
     pub who: u64,
     pub what: u64,
@@ -69,9 +69,9 @@ pub enum AttemptState {
         #[serde(flatten)]
         inner: Pending,
     },
-    Accepted {
+    Approved {
         #[serde(flatten)]
-        inner: Accepted,
+        inner: Approved,
     },
     Rejected {
         #[serde(flatten)]
@@ -105,14 +105,39 @@ where
 }
 
 impl AttemptRepository {
-    pub async fn cancel_attempt(&self, user_id: u64) -> DbResult<Record<Attempt<Cancelled>>> {
+    pub async fn extend_active_attempt(
+        &self,
+        user_id: u64,
+        time_limit: Duration,
+    ) -> DbResult<Record<Attempt<Active>>> {
+        let now = Utc::now();
+        let state = AttemptState::Active {
+            inner: Active {
+                until: now + time_limit,
+            },
+        };
+        let mut result = self
+            .db
+            .query("update only attempt set state = $state where meta::id(in) is $user_id and state.type = $state_type")
+            .bind(("state_type", "Active"))
+            .bind(("user_id", user_id))
+            .bind(("state", state))
+            .await?;
+        let attempt = result.take::<Option<Record<Attempt<Active>>>>(0)?.found()?;
+        Ok(attempt)
+    }
+
+    pub async fn cancel_active_attempt(
+        &self,
+        user_id: u64,
+    ) -> DbResult<Record<Attempt<Cancelled>>> {
         let now = Utc::now();
         let state = AttemptState::Cancelled {
             inner: Cancelled { when: now },
         };
         let mut result = self
             .db
-            .query("update only attempt content state = $state where meta::id(in) is $user_id and state.type = state_type")
+            .query("update only attempt set state = $state where meta::id(in) is $user_id and state.type = $state_type")
             .bind(("state_type", "Active"))
             .bind(("user_id", user_id))
             .bind(("state", state))
@@ -123,23 +148,23 @@ impl AttemptRepository {
         Ok(attempt)
     }
 
-    pub async fn expire_attempt(&self) -> DbResult<Vec<Record<Attempt<Expired>>>> {
+    pub async fn expire_active_attempts(&self) -> DbResult<Vec<Record<()>>> {
         let now = Utc::now();
         let state = AttemptState::Expired {
             inner: Expired { when: now },
         };
         let mut result = self
             .db
-            .query("update only attempt content state = $state where state.type = state_type and state.until < $now")
+            .query("update attempt set state = $state where state.type = $state_type and state.until < $now")
             .bind(("state_type", "Active"))
             .bind(("state", state))
             .bind(("now", now))
             .await?;
-        let attempt = result.take::<Vec<Record<Attempt<Expired>>>>(0)?;
+        let attempt = result.take::<Vec<Record<()>>>(0)?;
         Ok(attempt)
     }
 
-    pub async fn start_uploading_attempt(
+    pub async fn upload_active_attempt(
         &self,
         user_id: u64,
     ) -> DbResult<Record<Attempt<Uploading>>> {
@@ -149,7 +174,7 @@ impl AttemptRepository {
         };
         let mut result = self
             .db
-            .query("update only attempt content state = $state where meta::id(in) is $user_id and state.type = state_type")
+            .query("update only attempt set state = $state where meta::id(in) is $user_id and state.type = $state_type")
             .bind(("state_type", "Active"))
             .bind(("user_id", user_id))
             .bind(("state", state))
@@ -160,15 +185,15 @@ impl AttemptRepository {
         Ok(attempt)
     }
 
-    pub async fn approve_upload_attempt(
+    pub async fn approve_uploaded_attempt(
         &self,
         user_id: u64,
         image_id: u64,
         mod_id: u64,
-    ) -> DbResult<Record<Attempt<Accepted>>> {
+    ) -> DbResult<RoundWithAttempts<Approved>> {
         let now = Utc::now();
-        let state = AttemptState::Accepted {
-            inner: Accepted {
+        let state = AttemptState::Approved {
+            inner: Approved {
                 when: now,
                 who: mod_id,
                 what: image_id,
@@ -176,18 +201,19 @@ impl AttemptRepository {
         };
         let mut result = self
             .db
-            .query("update only attempt content state = $state where meta::id(in) is $user_id and state.type = state_type")
+            .query("let $attempt = update only attempt set state = $state where meta::id(in) is $user_id and state.type = $state_type")
             .bind(("state_type", "Uploading"))
             .bind(("user_id", user_id))
             .bind(("state", state))
+            .query("fn::get_round_with_attempt($attempt)")
             .await?;
         let attempt = result
-            .take::<Option<Record<Attempt<Accepted>>>>(0)?
+            .take::<Option<RoundWithAttempts<Approved>>>(1)?
             .found()?;
         Ok(attempt)
     }
 
-    pub async fn moderate_upload_attempt(
+    pub async fn moderate_uploaded_attempt(
         &self,
         user_id: u64,
         image_id: u64,
@@ -201,7 +227,7 @@ impl AttemptRepository {
         };
         let mut result = self
             .db
-            .query("update only attempt content state = $state where meta::id(in) is $user_id and state.type = state_type")
+            .query("update only attempt set state = $state where meta::id(in) is $user_id and state.type = $state_type")
             .bind(("state_type", "Uploading"))
             .bind(("user_id", user_id))
             .bind(("state", state))
@@ -212,15 +238,15 @@ impl AttemptRepository {
         Ok(attempt)
     }
 
-    pub async fn approve_attempt(
+    pub async fn approve_pending_attempt(
         &self,
         user_id: u64,
         image_id: u64,
         mod_id: u64,
-    ) -> DbResult<Record<Attempt<Accepted>>> {
+    ) -> DbResult<RoundWithAttempts<Approved>> {
         let now = Utc::now();
-        let state = AttemptState::Accepted {
-            inner: Accepted {
+        let state = AttemptState::Approved {
+            inner: Approved {
                 when: now,
                 who: mod_id,
                 what: image_id,
@@ -228,18 +254,19 @@ impl AttemptRepository {
         };
         let mut result = self
             .db
-            .query("update only attempt content state = $state where meta::id(in) is $user_id and state.type = state_type")
+            .query("let $attempt = update only attempt set state = $state where meta::id(in) is $user_id and state.type = $state_type")
             .bind(("state_type", "Pending"))
             .bind(("user_id", user_id))
             .bind(("state", state))
+            .query("fn::get_round_with_attempt($attempt)")
             .await?;
         let attempt = result
-            .take::<Option<Record<Attempt<Accepted>>>>(0)?
+            .take::<Option<RoundWithAttempts<Approved>>>(1)?
             .found()?;
         Ok(attempt)
     }
 
-    pub async fn reject_attempt(
+    pub async fn reject_pending_attempt(
         &self,
         user_id: u64,
         image_id: u64,
@@ -255,7 +282,7 @@ impl AttemptRepository {
         };
         let mut result = self
             .db
-            .query("update only attempt content state = $state where meta::id(in) is $user_id and state.type = state_type")
+            .query("update only attempt set state = $state where meta::id(in) is $user_id and state.type = $state_type")
             .bind(("state_type", "Pending"))
             .bind(("user_id", user_id))
             .bind(("state", state))
@@ -269,11 +296,105 @@ impl AttemptRepository {
 
 #[cfg(test)]
 mod tests {
-    use super::AttemptRepository;
-    use crate::services::{database::session_v3::tests::db, provider::Provider};
+    use chrono::Duration;
 
-    async fn sut() -> AttemptRepository {
+    use super::AttemptRepository;
+    use crate::services::{
+        database::session_v3::{round::RoundRepository, tests::db, user::UserRepository},
+        gamemodes::Mode,
+        provider::Provider,
+    };
+
+    async fn setup() -> (UserRepository, RoundRepository, AttemptRepository) {
         let db = db().await;
-        db.get()
+        (db.get(), db.get(), db.get())
+    }
+
+    #[tokio::test]
+    async fn extend_attempt_to_avoid_expiration() {
+        let (users, rounds, sut) = setup().await;
+        let user = users.create_or_update_user(0, "").await.unwrap();
+        rounds
+            .attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(-60 * 60))
+            .await
+            .unwrap();
+
+        sut.extend_active_attempt(0, Duration::seconds(60 * 60))
+            .await
+            .unwrap();
+        
+        let expired = sut.expire_active_attempts().await.unwrap();
+        assert!(expired.is_empty());
+    }
+
+    #[tokio::test]
+    async fn expire_one_out_of_two() {
+        let (users, rounds, sut) = setup().await;
+        let user = users.create_or_update_user(0, "").await.unwrap();
+        rounds
+            .attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(-60 * 60))
+            .await
+            .unwrap();
+        rounds
+            .attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(60 * 60))
+            .await
+            .unwrap();
+
+        let expired = sut.expire_active_attempts().await.unwrap();
+
+        assert_eq!(expired.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn cancel_attempt() {
+        let (users, rounds, sut) = setup().await;
+        let user = users.create_or_update_user(0, "").await.unwrap();
+        rounds
+            .attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(-60 * 60))
+            .await
+            .unwrap();
+
+        sut.cancel_active_attempt(0).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn accept_unmoderated_attempt() {
+        let (users, rounds, sut) = setup().await;
+        let user = users.create_or_update_user(0, "").await.unwrap();
+        rounds
+            .attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(-60 * 60))
+            .await
+            .unwrap();
+
+        sut.upload_active_attempt(0).await.unwrap();
+        sut.approve_uploaded_attempt(0, 0, 0).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn accept_moderated_attempt() {
+        let (users, rounds, sut) = setup().await;
+        let user = users.create_or_update_user(0, "").await.unwrap();
+        rounds
+            .attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(-60 * 60))
+            .await
+            .unwrap();
+
+        sut.upload_active_attempt(0).await.unwrap();
+        sut.moderate_uploaded_attempt(0, 0).await.unwrap();
+        sut.approve_pending_attempt(0, 0, 0).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn reject_moderated_attempt() {
+        let (users, rounds, sut) = setup().await;
+        let user = users.create_or_update_user(0, "").await.unwrap();
+        rounds
+            .attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(-60 * 60))
+            .await
+            .unwrap();
+
+        sut.upload_active_attempt(0).await.unwrap();
+        sut.moderate_uploaded_attempt(0, 0).await.unwrap();
+        sut.reject_pending_attempt(0, 0, 0).await.unwrap();
     }
 }

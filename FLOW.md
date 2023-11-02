@@ -15,9 +15,9 @@ User has participated in a round if one of his sessions is currently allocating 
 ```mermaid
 erDiagram
     User ||--o{ Attempt: ""
-    Attempt ||--o{ PreviousSubmissions: ""
+    Attempt ||--o{ PreviousAttempt: ""
     Round ||--|{ Attempt: ""
-    Round ||--o{ PreviousSubmissions: ""
+    Round ||--o{ PreviousAttempt: ""
 
     User {
         u64 id
@@ -29,7 +29,7 @@ erDiagram
         SessionState state
         DateTime created_at
     }
-    PreviousSubmissions {}
+    PreviousAttempt {}
     Round {
         Id id
         Mode mode
@@ -75,6 +75,6 @@ User cannot play the exact same round twice, but if necessary, they can particip
 ## Complete round
 
 1. Set attempt as accepted.
-2.1. Clone round, update date, incremet round, set multiplex from round logic
-2.2. Attach previous submissions.
-2.3. Create new previous submission, attach it.
+2.1. Clone round, update date, incremet round, set multiplex from round logic.
+2.2. Attach previous attempts.
+2.3. Add new previous attempt.

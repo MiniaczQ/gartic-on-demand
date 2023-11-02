@@ -5,15 +5,13 @@ use std::time::Duration;
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct Ross;
 
-pub const LAST_ROUND: u64 = 4;
-
 impl GameLogic for Ross {
     fn last_round(&self) -> u64 {
-        LAST_ROUND
+        4
     }
 
     fn time_limit(&self, round: u64) -> Duration {
-        if round < LAST_ROUND {
+        if round < self.last_round() {
             Duration::from_secs(900)
         } else {
             Duration::from_secs(5200)
@@ -21,7 +19,7 @@ impl GameLogic for Ross {
     }
 
     fn prompt(&self, round: u64) -> &'static str {
-        if round < LAST_ROUND {
+        if round < self.last_round() {
             "Draw an attribute."
         } else {
             "Draw a character using the attributes."
@@ -29,10 +27,10 @@ impl GameLogic for Ross {
     }
 
     fn multiplex(&self, round: u64) -> u64 {
-        if round < LAST_ROUND {
-            2
-        } else {
-            0
+        match round {
+            0 => 1,
+            1..=4 => 2,
+            _ => 0,
         }
     }
 }
