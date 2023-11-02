@@ -122,11 +122,14 @@ mod tests {
             .attempt_new_round(&user3, Mode::Ross, false, 1, Duration::zero())
             .await
             .unwrap();
-        attempts.upload_active_attempt(0).await.unwrap();
-        attempts.upload_active_attempt(1).await.unwrap();
-        attempts.moderate_uploaded_attempt(1, 1).await.unwrap();
-        attempts.upload_active_attempt(2).await.unwrap();
-        attempts.approve_uploaded_attempt(2, 2, 2).await.unwrap();
+        attempts.upload_active_attempt(&user0).await.unwrap();
+        attempts.upload_active_attempt(&user1).await.unwrap();
+        attempts.moderate_uploaded_attempt(&user1, 1).await.unwrap();
+        attempts.upload_active_attempt(&user2).await.unwrap();
+        attempts
+            .approve_uploaded_attempt(&user2, &user2, 2)
+            .await
+            .unwrap();
 
         let active_users = sut.get_active_users().await.unwrap();
 
@@ -141,13 +144,16 @@ mod tests {
             .attempt_new_round(&user, Mode::Ross, true, 4, Duration::zero())
             .await
             .unwrap();
-        attempts.cancel_active_attempt(0).await.unwrap();
+        attempts.cancel_active_attempt(&user).await.unwrap();
         rounds
             .attempt_new_round(&user, Mode::Ross, false, 2, Duration::zero())
             .await
             .unwrap();
-        attempts.upload_active_attempt(0).await.unwrap();
-        let round = attempts.approve_uploaded_attempt(0, 0, 0).await.unwrap();
+        attempts.upload_active_attempt(&user).await.unwrap();
+        let round = attempts
+            .approve_uploaded_attempt(&user, &user, 0)
+            .await
+            .unwrap();
         rounds
             .forward_complete_round(&round.round, &round.attempt, round.round.forward())
             .await

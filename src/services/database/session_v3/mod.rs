@@ -1,19 +1,28 @@
 use std::ops::{Deref, DerefMut};
 
 use serde::{Deserialize, Serialize};
-use surrealdb::sql::Thing;
+use surrealdb::sql::{Id, Thing};
 
 pub mod attempt;
-pub mod round;
-pub mod user;
 pub mod byproducts;
+pub mod round;
 pub mod stats;
+pub mod user;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Record<T = ()> {
     pub id: Thing,
     #[serde(flatten)]
     pub entry: T,
+}
+
+impl<T> Record<T> {
+    pub fn id(&self) -> u64 {
+        let Id::Number(id) = self.id.id else {
+            panic!("Expected numeric id")
+        };
+        id.try_into().expect("Failed cast")
+    }
 }
 
 impl<T> Deref for Record<T> {
@@ -42,6 +51,7 @@ mod tests {
         "mem://"
     }
 
+    #[allow(dead_code)]
     fn docker() -> &'static str {
         "ws://127.0.0.1:8000"
     }

@@ -243,7 +243,7 @@ mod tests {
         sut.attempt_new_round(&user, mode, nsfw, 1, time_limit)
             .await
             .unwrap();
-        attempts.cancel_active_attempt(0).await.unwrap();
+        attempts.cancel_active_attempt(&user).await.unwrap();
         sut.attempt_existing_round(&user, mode, nsfw, 0, time_limit)
             .await
             .unwrap();
@@ -310,8 +310,11 @@ mod tests {
         sut.attempt_new_round(&user, mode, nsfw, 2, time_limit)
             .await
             .unwrap();
-        attempts.upload_active_attempt(0).await.unwrap();
-        let round = attempts.approve_uploaded_attempt(0, 0, 0).await.unwrap();
+        attempts.upload_active_attempt(&user).await.unwrap();
+        let round = attempts
+            .approve_uploaded_attempt(&user, &user, 0)
+            .await
+            .unwrap();
         sut.forward_complete_round(&round.round, &round.attempt, round.round.forward())
             .await
             .unwrap();

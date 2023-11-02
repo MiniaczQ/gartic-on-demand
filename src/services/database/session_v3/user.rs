@@ -1,10 +1,10 @@
+use super::Record;
 use crate::services::{
     database::{Database, DbResult, MapToNotFound},
     provider::Provider,
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use super::Record;
 
 #[derive(Debug, Serialize)]
 struct CreateUser<'a> {
@@ -66,6 +66,16 @@ impl UserRepository {
         let user = result.take::<Option<Record<User>>>(0)?.found()?;
         Ok(user)
     }
+
+    async fn get_user(&self, id: u64) -> DbResult<Record<User>> {
+        let mut result = self
+            .db
+            .query("select * from only user where meta::id(id) is $id")
+            .bind(("id", id))
+            .await?;
+        let user = result.take::<Option<Record<User>>>(0)?.found()?;
+        Ok(user)
+    }
 }
 
 #[cfg(test)]
@@ -107,5 +117,20 @@ mod tests {
 
         sut.create_or_update_user(0, "a").await.unwrap();
         sut.create_or_update_user(0, "a").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_existing_user() {
+        let sut = setup().await;
+
+        sut.create_or_update_user(0, "a").await.unwrap();
+        sut.get_user(0).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn fail_get_non_existing_user() {
+        let sut = setup().await;
+
+        sut.get_user(0).await.unwrap_err();
     }
 }

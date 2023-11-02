@@ -1,7 +1,4 @@
-use super::{
-    attempt::{Approved, Attempt},
-    Record,
-};
+use super::attempt::{Approved, Attempt};
 use crate::services::{
     database::{Database, DbResult},
     provider::Provider,
@@ -82,8 +79,11 @@ mod tests {
                 .attempt_new_round(&user, Mode::Ross, false, 0, Duration::zero())
                 .await
                 .unwrap();
-            attempts.upload_active_attempt(0).await.unwrap();
-            let round = attempts.approve_uploaded_attempt(0, i, 0).await.unwrap();
+            attempts.upload_active_attempt(&user).await.unwrap();
+            let round = attempts
+                .approve_uploaded_attempt(&user, &user, i)
+                .await
+                .unwrap();
             rounds
                 .forward_complete_round(&round.round, &round.attempt, round.round.forward())
                 .await
