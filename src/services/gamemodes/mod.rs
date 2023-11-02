@@ -46,12 +46,19 @@ impl GameLogic for Mode {
             Mode::Ross => Ross.prompt(round),
         }
     }
+
+    fn multiplex(&self, round: u64) -> u64 {
+        match self {
+            Mode::Ross => Ross.multiplex(round),
+        }
+    }
 }
 
 pub trait GameLogic {
     fn last_round(&self) -> u64;
     fn time_limit(&self, round: u64) -> Duration;
     fn prompt(&self, round: u64) -> &'static str;
+    fn multiplex(&self, round: u64) -> u64;
 }
 
 #[derive(Debug, thiserror::Error)]

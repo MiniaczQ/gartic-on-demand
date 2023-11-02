@@ -27,4 +27,12 @@ impl GameLogic for Ross {
             "Draw a character using the attributes."
         }
     }
+
+    fn multiplex(&self, round: u64) -> u64 {
+        if round < LAST_ROUND {
+            2
+        } else {
+            0
+        }
+    }
 }

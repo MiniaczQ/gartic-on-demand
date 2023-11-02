@@ -1,33 +1,112 @@
-use super::{Database, DbResult};
-use crate::services::provider::Provider;
+use crate::services::{
+    database::{Database, DbResult, MapToNotFound},
+    provider::Provider,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use super::Record;
+
+#[derive(Debug, Serialize)]
+struct CreateUser<'a> {
+    id: u64,
+    name: &'a str,
+    created_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
-pub struct User<'a> {
-    pub name: &'a str,
+pub struct User {
+    pub name: String,
     pub created_at: DateTime<Utc>,
 }
 
-pub struct UsersRepository {
+pub struct UserRepository {
     db: Database,
 }
 
-impl<T> Provider<UsersRepository> for T
+impl<T> Provider<UserRepository> for T
 where
     T: Provider<Database>,
 {
-    fn get(&self) -> UsersRepository {
-        UsersRepository { db: self.get() }
+    fn get(&self) -> UserRepository {
+        UserRepository { db: self.get() }
     }
 }
 
-impl UsersRepository {
-    pub async fn create_user(&self, uid: u64, name: &str) -> DbResult<()> {
-        todo!()
+impl UserRepository {
+    pub async fn create_or_update_user(&self, id: u64, name: &str) -> DbResult<Record<User>> {
+        match self.update_user(id, name).await {
+            Err(_) => self.create_user(id, name).await,
+            Ok(user) => Ok(user),
+        }
     }
 
-    pub async fn update_user(&self, uid: u64, name: &str) -> DbResult<()> {
-        todo!()
+    async fn create_user(&self, id: u64, name: &str) -> DbResult<Record<User>> {
+        let created_at = Utc::now();
+        let user = CreateUser {
+            id,
+            name,
+            created_at,
+        };
+        let mut result = self
+            .db
+            .query("create user content $user")
+            .bind(("user", user))
+            .await?;
+        let user = result.take::<Option<Record<User>>>(0)?.found()?;
+        Ok(user)
+    }
+
+    async fn update_user(&self, id: u64, name: &str) -> DbResult<Record<User>> {
+        let mut result = self
+            .db
+            .query("update user set name = $name where meta::id(id) is $id")
+            .bind(("name", name))
+            .bind(("id", id))
+            .await?;
+        let user = result.take::<Option<Record<User>>>(0)?.found()?;
+        Ok(user)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::UserRepository;
+    use crate::services::{database::session_v3::tests::db, provider::Provider};
+
+    async fn sut() -> UserRepository {
+        let db = db().await;
+        db.get()
+    }
+
+    #[tokio::test]
+    async fn fail_second_create() {
+        let sut = sut().await;
+
+        sut.create_user(0, "a").await.unwrap();
+        sut.create_user(0, "a").await.unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn fail_update_without_create() {
+        let sut = sut().await;
+
+        sut.update_user(0, "a").await.unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn succeed_update_after_create() {
+        let sut = sut().await;
+
+        sut.create_user(0, "a").await.unwrap();
+        sut.update_user(0, "a").await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn succeed_create_then_update() {
+        let sut = sut().await;
+
+        sut.create_or_update_user(0, "a").await.unwrap();
+        sut.create_or_update_user(0, "a").await.unwrap();
     }
 }

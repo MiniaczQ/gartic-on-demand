@@ -14,30 +14,27 @@ User has participated in a round if one of his sessions is currently allocating 
 
 ```mermaid
 erDiagram
-    User ||--o{ Session: ""
-    User ||--o{ PreviousSessions: ""
-    Round ||--|{ Session: ""
-    Round ||--o{ PreviousSessions: ""
+    User ||--o{ Attempt: ""
+    Attempt ||--o{ PreviousSubmissions: ""
+    Round ||--|{ Attempt: ""
+    Round ||--o{ PreviousSubmissions: ""
 
     User {
         u64 id
         String name
         DateTime created_at
     }
-    Session {
+    Attempt {
         Id id
         SessionState state
         DateTime created_at
     }
-    PreviousSessions {
-        Id id
-        DateTime created_at
-    }
+    PreviousSubmissions {}
     Round {
         Id id
         Mode mode
         bool nsfw
-        u64 round
+        u64 round_no
         u64 multiplex
         DateTime created_at
     }
@@ -72,10 +69,12 @@ flowchart TD;
 
 User cannot play the exact same round twice, but if necessary, they can participate in a round they were in previously.
 
-1. Try find round N where user did not participate nor previously participate.
-2. If failed, try find round N where user did not participate, but could have previously participated.
-3. If failed, no further rounds available.
+1. Try find first complete round N without currently approved attempt, ordered by least previous approved attempts, then by random.
+2. If failed, no further rounds available.
 
 ## Complete round
 
-
+1. Set attempt as accepted.
+2.1. Clone round, update date, incremet round, set multiplex from round logic
+2.2. Attach previous submissions.
+2.3. Create new previous submission, attach it.
