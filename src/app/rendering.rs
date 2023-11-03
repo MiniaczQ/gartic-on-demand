@@ -3,10 +3,7 @@ use std::borrow::Cow;
 use async_trait::async_trait;
 use poise::serenity_prelude::{Attachment, AttachmentType};
 use rossbot::services::{
-    database::{
-        assets::ImageRepository,
-        session::{Active, LobbyWithSessions},
-    },
+    database::{assets::ImageRepository, attempt::Active, round::RoundWithAttempts, ThingToU64},
     gamemodes::{ross::Ross, Mode},
     image_processing::{concat_vertical, normalize_image_aoi, RgbaConvert},
 };
@@ -23,7 +20,7 @@ pub trait ModeRenderer {
     async fn render_prompt_image(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
-        lobby: &LobbyWithSessions<Active>,
+        room: &RoundWithAttempts<Active>,
         ir: &ImageRepository,
     ) -> Result<AttachmentType<'static>, AppError>;
 
@@ -35,12 +32,13 @@ pub trait ModeRenderer {
     async fn render_complete_image<T: Send + Sync>(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
-        lobby: &LobbyWithSessions<T>,
+        room: &RoundWithAttempts<T>,
         ir: &ImageRepository,
         attachment: &Attachment,
     ) -> Result<AttachmentType<'static>, AppError>;
 
     fn render_partial_author(&self, author: u64) -> String;
+    fn render_partial_authors(&self, authors: &[u64]) -> String;
     fn render_complete_authors(&self, author: u64, others: &[u64]) -> String;
 }
 
@@ -49,11 +47,11 @@ impl ModeRenderer for Mode {
     async fn render_prompt_image(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
-        lobby: &LobbyWithSessions<Active>,
+        room: &RoundWithAttempts<Active>,
         ir: &ImageRepository,
     ) -> Result<AttachmentType<'static>, AppError> {
         match &self {
-            Mode::Ross => Ross.render_prompt_image(ctx, lobby, ir).await,
+            Mode::Ross => Ross.render_prompt_image(ctx, room, ir).await,
         }
     }
 
@@ -69,18 +67,24 @@ impl ModeRenderer for Mode {
     async fn render_complete_image<T: Send + Sync>(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
-        lobby: &LobbyWithSessions<T>,
+        room: &RoundWithAttempts<T>,
         ir: &ImageRepository,
         attachment: &Attachment,
     ) -> Result<AttachmentType<'static>, AppError> {
         match &self {
-            Mode::Ross => Ross.render_complete_image(ctx, lobby, ir, attachment).await,
+            Mode::Ross => Ross.render_complete_image(ctx, room, ir, attachment).await,
         }
     }
 
     fn render_partial_author(&self, author: u64) -> String {
         match &self {
             Mode::Ross => Ross.render_partial_author(author),
+        }
+    }
+
+    fn render_partial_authors(&self, authors: &[u64]) -> String {
+        match &self {
+            Mode::Ross => Ross.render_partial_authors(authors),
         }
     }
 
@@ -96,10 +100,10 @@ impl ModeRenderer for Ross {
     async fn render_prompt_image(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
-        lobby: &LobbyWithSessions<Active>,
+        room: &RoundWithAttempts<Active>,
         ir: &ImageRepository,
     ) -> Result<AttachmentType<'static>, AppError> {
-        let image = extract_2x2_image(ctx, lobby, ir).await?;
+        let image = extract_2x2_image(ctx, room, ir).await?;
         let attachment = AttachmentType::Bytes {
             data: std::borrow::Cow::Owned(image.to_png()),
             filename: "prompt.png".to_owned(),
@@ -125,14 +129,14 @@ impl ModeRenderer for Ross {
     async fn render_complete_image<T: Send + Sync>(
         &self,
         ctx: &(impl AsRef<Http> + Send + Sync),
-        lobby: &LobbyWithSessions<T>,
+        room: &RoundWithAttempts<T>,
         ir: &ImageRepository,
         attachment: &Attachment,
     ) -> Result<AttachmentType<'static>, AppError> {
         let image = fetch_image_from_attachment(attachment)
             .await
             .map_user("Attachment is not a valid image")?;
-        let attributes = extract_2x2_image(&ctx, lobby, ir).await?;
+        let attributes = extract_2x2_image(&ctx, room, ir).await?;
         let image = normalize_image_aoi(&image, 2 * CONFIG.image.width, 2 * CONFIG.image.height);
         let image = concat_vertical(&[attributes, image]);
         let attachment = AttachmentType::Bytes {
@@ -146,45 +150,55 @@ impl ModeRenderer for Ross {
         format!("<@{}>", author)
     }
 
-    fn render_complete_authors(&self, author: u64, others: &[u64]) -> String {
-        let others = others
+    fn render_partial_authors(&self, authors: &[u64]) -> String {
+        let authors = authors
             .iter()
             .map(|author| format!("<@{}>", author))
             .collect::<Vec<_>>();
-        let others = others.join(", ");
+        authors.join(", ")
+    }
+
+    fn render_complete_authors(&self, author: u64, others: &[u64]) -> String {
+        let others = self.render_partial_authors(others);
         format!("<@{}>, attributes by {}", author, others)
     }
 }
 
-pub trait LobbyRenderer {
+pub trait RoundRenderer {
     fn render_partial_text(&self) -> String;
     fn render_complete_text(&self) -> String;
 }
 
-impl<T> LobbyRenderer for LobbyWithSessions<T> {
+impl<T> RoundRenderer for RoundWithAttempts<T> {
     fn render_partial_text(&self) -> String {
-        let sfw: &str = if self.lobby.nsfw { "NSFW " } else { "" };
+        let sfw: &str = if self.round.nsfw { "NSFW " } else { "" };
         let content = format!(
             "{}{:?} mode round {} by {}",
             sfw,
-            self.active.mode,
-            self.active.round + 1,
-            self.active.mode.render_partial_author(self.active.who)
+            self.round.mode,
+            self.round.round_no + 1,
+            self.round
+                .mode
+                .render_partial_author(self.attempt.who.to_u64())
         );
         content
     }
 
     fn render_complete_text(&self) -> String {
-        let sfw: &str = if self.lobby.nsfw { "NSFW " } else { "" };
-        let others = self.accepted.iter().map(|a| a.who).collect::<Vec<_>>();
+        let sfw: &str = if self.round.nsfw { "NSFW " } else { "" };
+        let others = self
+            .previous
+            .iter()
+            .map(|a| a.who.to_u64())
+            .collect::<Vec<_>>();
         let content = format!(
             "{}{:?} mode round {} by {}",
             sfw,
-            self.active.mode,
-            self.active.round + 1,
-            self.active
+            self.round.mode,
+            self.round.round_no + 1,
+            self.round
                 .mode
-                .render_complete_authors(self.active.who, &others)
+                .render_complete_authors(self.attempt.who.to_u64(), &others)
         );
         content
     }

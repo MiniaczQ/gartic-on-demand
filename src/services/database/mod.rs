@@ -1,17 +1,22 @@
 pub mod assets;
+pub mod attempt;
+pub mod byproducts;
 pub mod migrations;
-pub mod session;
+pub mod round;
+pub mod stats;
+pub mod user;
 
-use std::ops::{Deref, DerefMut};
-
+use self::migrations::MigratorConfig;
 use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 use surrealdb::{
     engine::any::{connect, Any},
     sql::{Id, Thing},
     Surreal,
 };
-
-use self::migrations::MigratorConfig;
 
 #[derive(Debug, Deserialize)]
 pub struct DatabaseConfig {
@@ -45,59 +50,70 @@ impl Deref for Database {
     }
 }
 
-#[derive(Deserialize)]
-pub struct RawRecord<T = ()> {
-    id: Thing,
-    #[serde(flatten)]
-    entry: T,
-}
-
 #[derive(Debug, thiserror::Error)]
-#[error("Id could not be converted to the correct type")]
-pub struct IdConversionError;
+pub enum DbError {
+    #[error("{0}")]
+    Database(#[from] surrealdb::Error),
+    #[error("{0:?}")]
+    DatabaseCheck(HashMap<usize, surrealdb::Error>),
+    #[error("Not found")]
+    NotFound,
+}
 
-impl<T> TryFrom<RawRecord<T>> for Record<T> {
-    type Error = IdConversionError;
+pub type DbResult<T> = Result<T, DbError>;
 
-    fn try_from(value: RawRecord<T>) -> Result<Self, Self::Error> {
-        let Id::Number(id) = value.id.id else {
-            Err(IdConversionError)?
-        };
-        let id: u64 = id.try_into().map_err(|_| IdConversionError)?;
-        Ok(Record {
-            id,
-            entry: value.entry,
-        })
+pub trait MapToNotFound<T> {
+    fn found(self) -> DbResult<T>;
+}
+
+impl<T> MapToNotFound<T> for Option<T> {
+    fn found(self) -> DbResult<T> {
+        self.ok_or(DbError::NotFound)
     }
 }
 
-pub trait IdConvert {
-    type Target;
-
-    fn convert_id(self) -> Result<Self::Target, IdConversionError>;
+pub trait BetterCheck
+where
+    Self: Sized,
+{
+    fn better_check(self) -> DbResult<Self>;
 }
 
-impl<T> IdConvert for RawRecord<T> {
-    type Target = Record<T>;
-
-    fn convert_id(self) -> Result<Self::Target, IdConversionError> {
-        self.try_into()
-    }
-}
-
-impl<T> IdConvert for Vec<RawRecord<T>> {
-    type Target = Vec<Record<T>>;
-
-    fn convert_id(self) -> Result<Self::Target, IdConversionError> {
-        self.into_iter().map(Record::try_from).collect()
+impl BetterCheck for surrealdb::Response {
+    fn better_check(mut self) -> DbResult<Self> {
+        let errors = self.take_errors();
+        if errors.is_empty() {
+            Ok(self)
+        } else {
+            Err(DbError::DatabaseCheck(errors))
+        }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Record<T = ()> {
-    pub id: u64,
+    pub id: Thing,
     #[serde(flatten)]
     pub entry: T,
+}
+
+impl<T> Record<T> {
+    pub fn id(&self) -> u64 {
+        self.id.to_u64()
+    }
+}
+
+pub trait ThingToU64 {
+    fn to_u64(&self) -> u64;
+}
+
+impl ThingToU64 for Thing {
+    fn to_u64(&self) -> u64 {
+        let Id::Number(id) = self.id else {
+            panic!("Expected numeric id")
+        };
+        id.try_into().expect("Failed cast")
+    }
 }
 
 impl<T> Deref for Record<T> {
@@ -114,29 +130,54 @@ impl<T> DerefMut for Record<T> {
     }
 }
 
-#[derive(Deserialize)]
-pub struct Count {
-    pub count: u64,
-}
+#[cfg(test)]
+mod tests {
+    use crate::services::database::{
+        migrations::{Migrator, MigratorConfig},
+        Database,
+    };
+    use surrealdb::engine::any::connect;
 
-#[derive(Debug, thiserror::Error)]
-pub enum DbError {
-    #[error("{0}")]
-    IdConversion(#[from] IdConversionError),
-    #[error("{0}")]
-    Database(#[from] surrealdb::Error),
-    #[error("Not found")]
-    NotFound,
-}
+    fn memory() -> &'static str {
+        "mem://"
+    }
 
-pub type DbResult<T> = Result<T, DbError>;
+    #[allow(dead_code)]
+    fn docker() -> &'static str {
+        "ws://127.0.0.1:8000"
+    }
 
-pub trait MapToNotFound<T> {
-    fn found(self) -> DbResult<T>;
-}
+    async fn clear_db(db: &Database) {
+        db.query(
+            r"
+            remove table migrations;
+            remove table user;
+            remove table round;
+            remove table attempt;
+            remove table previous;
+            ",
+        )
+        .await
+        .unwrap();
+    }
 
-impl<T> MapToNotFound<T> for Option<T> {
-    fn found(self) -> DbResult<T> {
-        self.ok_or(DbError::NotFound)
+    async fn migrate_db(db: &Database) {
+        Migrator::new(&MigratorConfig {
+            migrations_dir: "./migrations".into(),
+        })
+        .migrate(db)
+        .await
+        .unwrap();
+    }
+
+    pub async fn db() -> Database {
+        let addr = memory();
+        let db = Database {
+            inner: connect(addr).await.unwrap(),
+        };
+        db.use_ns("test").use_db("test").await.unwrap();
+        clear_db(&db).await;
+        migrate_db(&db).await;
+        db
     }
 }

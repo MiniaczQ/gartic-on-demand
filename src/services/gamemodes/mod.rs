@@ -1,8 +1,8 @@
 pub mod ross;
 
 use self::ross::Ross;
+use chrono::Duration;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GameSession {
@@ -35,23 +35,30 @@ impl GameLogic for Mode {
         }
     }
 
-    fn time_limit(&self, round: u64) -> Duration {
+    fn time_limit(&self, round_no: u64) -> Duration {
         match self {
-            Mode::Ross => Ross.time_limit(round),
+            Mode::Ross => Ross.time_limit(round_no),
         }
     }
 
-    fn prompt(&self, round: u64) -> &'static str {
+    fn prompt(&self, round_no: u64) -> &'static str {
         match self {
-            Mode::Ross => Ross.prompt(round),
+            Mode::Ross => Ross.prompt(round_no),
+        }
+    }
+
+    fn multiplex(&self, round_no: u64) -> u64 {
+        match self {
+            Mode::Ross => Ross.multiplex(round_no),
         }
     }
 }
 
 pub trait GameLogic {
     fn last_round(&self) -> u64;
-    fn time_limit(&self, round: u64) -> Duration;
-    fn prompt(&self, round: u64) -> &'static str;
+    fn time_limit(&self, round_no: u64) -> Duration;
+    fn prompt(&self, round_no: u64) -> &'static str;
+    fn multiplex(&self, round_no: u64) -> u64;
 }
 
 #[derive(Debug, thiserror::Error)]

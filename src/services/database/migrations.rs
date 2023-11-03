@@ -16,7 +16,7 @@ use tracing::{error, info};
 
 #[derive(Debug, Deserialize)]
 pub struct MigratorConfig {
-    migrations_dir: PathBuf,
+    pub migrations_dir: PathBuf,
 }
 
 pub struct Migrator<'a> {

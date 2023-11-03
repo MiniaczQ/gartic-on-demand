@@ -1,9 +1,10 @@
 use crate::app::{
     error::ConvertError, response::ResponseContext, util::respond_with_prompt, AppContext, AppError,
 };
-use chrono::Utc;
 use rossbot::services::{
-    database::session::SessionRepository, gamemodes::GameLogic, provider::Provider,
+    database::{attempt::AttemptRepository, round::RoundRepository, user::UserRepository},
+    gamemodes::GameLogic,
+    provider::Provider,
 };
 use tracing::error;
 
@@ -21,14 +22,25 @@ pub async fn extend(ctx: AppContext<'_>) -> Result<(), AppError> {
 }
 
 async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
-    let sr: SessionRepository = ctx.data().get();
-    let uid = ctx.author().id.0;
-    let mut lobby = sr.get(uid).await.map_user("No active game session")?;
-    let new_until = Utc::now() + lobby.lobby.mode.time_limit(lobby.active.round);
-    lobby.active.state.until = new_until;
-    sr.extend(uid, new_until)
+    let ar: AttemptRepository = ctx.data().get();
+    let ur: UserRepository = ctx.data().get();
+    let rr: RoundRepository = ctx.data().get();
+    let user = ctx.author();
+    let user = ur
+        .create_or_update_user(user.id.0, &user.name)
+        .await
+        .map_internal("Failed to update user")?;
+
+    let round = rr
+        .get_active_round(&user)
+        .await
+        .map_user("No active game session")?;
+
+    let round = ar
+        .extend_active_attempt(&user, round.round.mode.time_limit(round.round.round_no))
         .await
         .map_internal("Failed to extend timer")?;
-    respond_with_prompt(rsx, &ctx, &lobby, true).await?;
+
+    respond_with_prompt(rsx, &ctx, &round, true).await?;
     Ok(())
 }

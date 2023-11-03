@@ -94,7 +94,6 @@ fn options() -> poise::FrameworkOptions<AppData, AppError> {
             commands::submit::submit(),
             commands::cancel::cancel(),
             commands::current::current(),
-            commands::incomplete_games::incomplete_games(),
             commands::random_attributes::random_attributes(),
             commands::purge::purge(),
             commands::extend::extend(),
