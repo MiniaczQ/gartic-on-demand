@@ -33,6 +33,7 @@ pub struct AppConfig {
     pub image: Image,
     pub log: LogConfig,
     pub database: DatabaseConfig,
+    pub notify: NotifyConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -74,4 +75,9 @@ pub struct Image {
 #[derive(Debug, Deserialize)]
 pub struct Messages {
     pub notify: MessageId,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NotifyConfig {
+    pub cooldown: u64,
 }

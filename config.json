@@ -44,5 +44,8 @@
         "migrator": {
             "migrations_dir": "./migrations"
         }
+    },
+    "notify": {
+        "cooldown": 3600
     }
 }

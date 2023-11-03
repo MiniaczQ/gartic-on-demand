@@ -156,7 +156,7 @@ impl StatsPrinter {
     }
 
     fn cooldown() -> DateTime<Utc> {
-        Utc::now() + Duration::from_secs(300)
+        Utc::now() + Duration::from_secs(CONFIG.notify.cooldown)
     }
 
     async fn update_activity(
