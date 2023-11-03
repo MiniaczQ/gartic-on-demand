@@ -5,6 +5,7 @@ use crate::services::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 #[derive(Debug, Serialize)]
 struct CreateUser<'a> {
@@ -35,7 +36,10 @@ where
 impl UserRepository {
     pub async fn create_or_update_user(&self, id: u64, name: &str) -> DbResult<Record<User>> {
         match self.update_user(id, name).await {
-            Err(_) => self.create_user(id, name).await,
+            Err(e) => {
+                warn!(error = ?e);
+                self.create_user(id, name).await
+            }
             Ok(user) => Ok(user),
         }
     }
