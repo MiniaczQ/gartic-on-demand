@@ -22,6 +22,7 @@ use tracing::error;
 #[derive(Debug, poise::ChoiceParameter)]
 pub enum GameArg {
     Ross,
+    Evolution,
 }
 
 /// Start a new game session, by default from round 1
@@ -119,5 +120,6 @@ async fn find_or_create_session(
 fn map_game(mode: GameArg) -> Mode {
     match mode {
         GameArg::Ross => Mode::Ross,
+        GameArg::Evolution => Mode::Evolution,
     }
 }

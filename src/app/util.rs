@@ -13,11 +13,12 @@ use reqwest::header::{self, HeaderValue};
 use rossbot::services::{
     database::{
         assets::{AssetKind, ImageRepository},
-        attempt::Active,
+        attempt::{Active, Approved, Attempt},
         round::RoundWithAttempts,
+        Record,
     },
     gamemodes::GameLogic,
-    image_processing::{concat_2_2, RgbaConvert},
+    image_processing::{concat_2_2, concat_vertical, RgbaConvert},
     provider::Provider,
 };
 use serenity::http::Http;
@@ -45,21 +46,60 @@ pub async fn fetch_image_from_attachment(attachment: &Attachment) -> Option<Rgba
     Some(image)
 }
 
-pub async fn extract_2x2_image<T>(
+pub async fn extract_2x2_image(
     ctx: &(impl AsRef<Http> + Send + Sync),
-    round: &RoundWithAttempts<T>,
     ir: &ImageRepository,
+    attempts: &[Record<Attempt<Approved>>],
+    nsfw: bool,
 ) -> Result<RgbaImage, AppError> {
-    let mut images = Vec::with_capacity(4);
-    let channel = match round.round.nsfw {
+    let n = 4;
+    let mut images = Vec::with_capacity(n);
+    complement_submissions(ctx, &mut images, attempts, nsfw).await?;
+    complement_draw_this(ctx, &mut images, ir, n).await?;
+    complement_in_construction(ctx, &mut images, ir, n).await?;
+    let image = concat_2_2(&images);
+    Ok(image)
+}
+
+pub async fn extract_nx1_image(
+    ctx: &(impl AsRef<Http> + Send + Sync),
+    ir: &ImageRepository,
+    attempts: &[Record<Attempt<Approved>>],
+    nsfw: bool,
+    n: usize,
+) -> Result<RgbaImage, AppError> {
+    let mut images = Vec::with_capacity(n);
+    complement_submissions(ctx, &mut images, attempts, nsfw).await?;
+    complement_draw_this(ctx, &mut images, ir, n).await?;
+    complement_in_construction(ctx, &mut images, ir, n).await?;
+    let image = concat_vertical(&images);
+    Ok(image)
+}
+
+async fn complement_submissions(
+    ctx: &(impl AsRef<Http> + Send + Sync),
+    images: &mut Vec<RgbaImage>,
+    attempts: &[Record<Attempt<Approved>>],
+    nsfw: bool,
+) -> Result<(), AppError> {
+    let channel = match nsfw {
         true => CONFIG.channels.partial_nsfw,
         false => CONFIG.channels.partial,
     };
-    for what in round.previous.iter().map(|a| a.state.what) {
+    for what in attempts.iter().map(|a| a.state.what) {
         let image = fetch_image_from_channel(ctx, channel, what).await?;
         images.push(image);
     }
-    if images.len() < 4 {
+    Ok(())
+}
+
+async fn complement_draw_this(
+    ctx: &(impl AsRef<Http> + Send + Sync),
+    images: &mut Vec<RgbaImage>,
+    ir: &ImageRepository,
+    n: usize,
+) -> Result<(), AppError> {
+    if images.len() < n {
         let required = 1;
         let assets = ir
             .random(AssetKind::DrawThis, required)
@@ -73,14 +113,23 @@ pub async fn extract_2x2_image<T>(
         for _ in 0..placeholders {
             images.push(RgbaImage::load("./assets/placeholders/draw-this.png").await);
         }
-    }
-    if images.len() < 4 {
-        let required = 4 - images.len() as u32;
+    };
+    Ok(())
+}
+
+async fn complement_in_construction(
+    ctx: &(impl AsRef<Http> + Send + Sync),
+    images: &mut Vec<RgbaImage>,
+    ir: &ImageRepository,
+    n: usize,
+) -> Result<(), AppError> {
+    if images.len() < n {
+        let required = n - images.len();
         let assets = ir
-            .random(AssetKind::InConstruction, required)
+            .random(AssetKind::InConstruction, required as u32)
             .await
             .map_internal("Missing InConstruction assets")?;
-        let placeholders = required - assets.len() as u32;
+        let placeholders = required - assets.len();
         for image in assets.into_iter().map(|a| a.id()) {
             let image =
                 fetch_image_from_channel(ctx, CONFIG.channels.in_contruction, image).await?;
@@ -89,9 +138,8 @@ pub async fn extract_2x2_image<T>(
         for _ in 0..placeholders {
             images.push(RgbaImage::load("./assets/placeholders/in-construction.png").await);
         }
-    }
-    let image = concat_2_2(&images);
-    Ok(image)
+    };
+    Ok(())
 }
 
 pub fn raw_image_to_attachment<'a>(bytes: Vec<u8>) -> AttachmentType<'a> {
