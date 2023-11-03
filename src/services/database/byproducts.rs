@@ -27,12 +27,14 @@ impl ByproductsRepository {
                     where out.mode is $mode
                     and out.round_no in $round_nos
                     and out.nsfw is false
+                    and state.type = $state_type
                     order by rand()
                     limit 4
                 ",
             )
             .bind(("mode", "Ross"))
             .bind(("round_nos", &[0, 1, 2, 3]))
+            .bind(("state_type", "Approved"))
             .await?;
         let attempts = result.take::<Vec<Attempt<Approved>>>(0)?;
         Ok(attempts)
@@ -63,9 +65,16 @@ mod tests {
 
     #[tokio::test]
     async fn no_attributes_available() {
-        let (_, _, _, sut) = setup().await;
+        let (users, rounds, attempts, sut) = setup().await;
+        let user = users.create_or_update_user(0, "").await.unwrap();
+        rounds
+            .attempt_new_round(&user, Mode::Ross, false, 0, Duration::zero())
+            .await
+            .unwrap();
+        attempts.upload_active_attempt(&user).await.unwrap();
 
         let attributes = sut.get_random_ross_attributes().await.unwrap();
+
         assert_eq!(attributes.len(), 0);
     }
 
@@ -73,7 +82,6 @@ mod tests {
     async fn enough_attributes_available() {
         let (users, rounds, attempts, sut) = setup().await;
         let user = users.create_or_update_user(0, "").await.unwrap();
-
         for i in 0..4 {
             rounds
                 .attempt_new_round(&user, Mode::Ross, false, 0, Duration::zero())
@@ -88,6 +96,7 @@ mod tests {
         }
 
         let attributes = sut.get_random_ross_attributes().await.unwrap();
+
         assert_eq!(attributes.len(), 4);
     }
 }
