@@ -1,6 +1,8 @@
 use crate::app::{error::ConvertError, response::ResponseContext, AppContext, AppError};
 use rossbot::services::{
-    database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker,
+    database::{attempt::AttemptRepository, user::UserRepository},
+    provider::Provider,
+    status_update::StatusUpdateWaker,
 };
 use tracing::error;
 
@@ -18,9 +20,16 @@ pub async fn cancel(ctx: AppContext<'_>) -> Result<(), AppError> {
 }
 
 async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
-    let sr: SessionRepository = ctx.data().get();
-    let uid = ctx.author().id.0;
-    sr.cancel(uid).await.map_user("No previous session")?;
+    let ar: AttemptRepository = ctx.data().get();
+    let ur: UserRepository = ctx.data().get();
+    let user = ctx.author();
+    let user = ur
+        .create_or_update_user(user.id.0, &user.name)
+        .await
+        .map_internal("Failed to update user")?;
+    ar.cancel_active_attempt(&user)
+        .await
+        .map_user("No previous session")?;
     rsx.respond(|f| f.content("Cancelled previous session"))
         .await?;
     let waker: StatusUpdateWaker = ctx.data().get();

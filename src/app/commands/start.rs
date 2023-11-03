@@ -7,8 +7,10 @@ use crate::app::{
 };
 use rossbot::services::{
     database::{
-        session::{Active, LobbyWithSessions, SessionRepository},
-        DbError,
+        attempt::{Active, AttemptRepository},
+        round::{RoundRepository, RoundWithAttempts},
+        user::{User, UserRepository},
+        DbError, Record,
     },
     gamemodes::{GameLogic, Mode},
     provider::Provider,
@@ -29,7 +31,6 @@ pub async fn start(
     #[description = "Game mode you want to play"] mode: GameArg,
     #[description = "Play the NSFW variant (+18 only)"] nsfw: Option<bool>,
     //#[description = "Round to start at"]#[min = 1] round: Option<u64>,
-    //#[description = "Whether to find games where you already played"] allow_repeats: Option<bool>,
 ) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);
     rsx.init().await?;
@@ -48,10 +49,11 @@ async fn process(
     round: Option<u64>,
     nsfw: Option<bool>,
 ) -> Result<(), AppError> {
-    let sr: SessionRepository = ctx.data().get();
+    let ar: AttemptRepository = ctx.data().get();
+    let ur: UserRepository = ctx.data().get();
+    let rr: RoundRepository = ctx.data().get();
     let user = ctx.author();
-    let uid = user.id.0;
-    let round = round.unwrap_or(1).sub(1);
+    let round_no = round.unwrap_or(1).sub(1);
     let nsfw = nsfw.unwrap_or(false);
 
     if nsfw && !is_adult(&ctx, user).await? {
@@ -60,22 +62,23 @@ async fn process(
         return Ok(());
     }
 
-    sr.ensure_user(uid, &user.name)
+    let user = ur
+        .create_or_update_user(user.id.0, &user.name)
         .await
-        .map_internal("Failed to create user")?;
+        .map_internal("Failed to update user")?;
 
-    sr.stop_expired()
+    ar.expire_active_attempts()
         .await
         .map_internal("Failed to unlock expired sessions")?;
     let waker: StatusUpdateWaker = ctx.data().get();
     waker.wake();
 
-    let maybe_lobby = sr.get(uid).await;
+    let maybe_lobby = rr.get_active_round(&user).await;
     if let Ok(lobby) = maybe_lobby {
         return respond_with_prompt(rsx, &ctx, &lobby, true).await;
     }
 
-    let lobby = find_or_create_session(sr, uid, mode, round, nsfw).await?;
+    let lobby = find_or_create_session(rr, &user, mode, round_no, nsfw).await?;
     respond_with_prompt(rsx, &ctx, &lobby, false).await?;
     let waker: StatusUpdateWaker = ctx.data().get();
     waker.wake();
@@ -83,29 +86,33 @@ async fn process(
 }
 
 async fn find_or_create_session(
-    sr: SessionRepository,
-    uid: u64,
+    rr: RoundRepository,
+    user: &Record<User>,
     mode: GameArg,
-    round: u64,
+    round_no: u64,
     nsfw: bool,
-) -> Result<LobbyWithSessions<Active>, AppError> {
+) -> Result<RoundWithAttempts<Active>, AppError> {
     let mode = map_game(mode);
 
-    if round > mode.last_round() {
+    if round_no > mode.last_round() {
         None.map_user("Gamemode does not support this many rounds")?;
     }
 
-    let maybe_lobby = sr.find_attach(uid, mode, round, nsfw, false).await;
-    let lobby = match (maybe_lobby, round) {
+    let time_limit = mode.time_limit(round_no);
+
+    let maybe_lobby = rr
+        .attempt_existing_round(user, mode, nsfw, round_no, time_limit)
+        .await;
+    let round = match (maybe_lobby, round_no) {
         (Ok(lobby), _) => lobby,
-        (Err(DbError::NotFound), 0) => sr
-            .create_attach(uid, mode, nsfw)
+        (Err(DbError::NotFound), 0) => rr
+            .attempt_new_round(user, mode, nsfw, mode.multiplex(round_no), time_limit)
             .await
             .map_internal("Failed to create game session")?,
         (e, _) => e.map_user("Did not find pending sessions")?,
     };
 
-    Ok(lobby)
+    Ok(round)
 }
 
 fn map_game(mode: GameArg) -> Mode {

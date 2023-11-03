@@ -82,6 +82,8 @@ pub enum AttemptState {
 
 #[derive(Debug, Deserialize)]
 pub struct Attempt<T> {
+    #[serde(rename = "in")]
+    pub who: Thing,
     pub state: T,
     pub created_at: DateTime<Utc>,
 }
@@ -110,7 +112,7 @@ impl AttemptRepository {
         &self,
         user: &Record<User>,
         time_limit: Duration,
-    ) -> DbResult<Record<Attempt<Active>>> {
+    ) -> DbResult<RoundWithAttempts<Active>> {
         let now = Utc::now();
         let state = AttemptState::Active {
             inner: Active {
@@ -119,12 +121,15 @@ impl AttemptRepository {
         };
         let mut result = self
             .db
-            .query("update only attempt set state = $state where in is $user and state.type = $state_type")
+            .query("let $attempt = update only attempt set state = $state where in is $user and state.type = $state_type")
             .bind(("state_type", "Active"))
             .bind(("user", &user.id))
             .bind(("state", state))
+            .query("fn::get_round_with_attempt($attempt)")
             .await?;
-        let attempt = result.take::<Option<Record<Attempt<Active>>>>(0)?.found()?;
+        let attempt = result
+            .take::<Option<RoundWithAttempts<Active>>>(1)?
+            .found()?;
         Ok(attempt)
     }
 
@@ -168,20 +173,21 @@ impl AttemptRepository {
     pub async fn upload_active_attempt(
         &self,
         user: &Record<User>,
-    ) -> DbResult<Record<Attempt<Uploading>>> {
+    ) -> DbResult<RoundWithAttempts<Uploading>> {
         let now = Utc::now();
         let state = AttemptState::Uploading {
             inner: Uploading { since: now },
         };
         let mut result = self
             .db
-            .query("update only attempt set state = $state where in is $user and state.type = $state_type")
+            .query("let $attempt = update only attempt set state = $state where in is $user and state.type = $state_type")
             .bind(("state_type", "Active"))
             .bind(("user", &user.id))
             .bind(("state", state))
+            .query("fn::get_round_with_attempt($attempt)")
             .await?;
         let attempt = result
-            .take::<Option<Record<Attempt<Uploading>>>>(0)?
+            .take::<Option<RoundWithAttempts<Uploading>>>(1)?
             .found()?;
         Ok(attempt)
     }
@@ -189,14 +195,13 @@ impl AttemptRepository {
     pub async fn approve_uploaded_attempt(
         &self,
         user: &Record<User>,
-        reviewer: &Record<User>,
         image_id: u64,
     ) -> DbResult<RoundWithAttempts<Approved>> {
         let now = Utc::now();
         let state = AttemptState::Approved {
             inner: Approved {
                 when: now,
-                who: reviewer.id.clone(),
+                who: user.id.clone(),
                 what: image_id,
             },
         };
@@ -235,6 +240,20 @@ impl AttemptRepository {
             .await?;
         let attempt = result
             .take::<Option<Record<Attempt<Pending>>>>(0)?
+            .found()?;
+        Ok(attempt)
+    }
+
+    pub async fn get_pending_attempt(&self, image_id: u64) -> DbResult<RoundWithAttempts<Pending>> {
+        let mut result = self
+            .db
+            .query("let $attempt = select * from only attempt where state.what is $what and state.type = $state_type")
+            .bind(("state_type", "Pending"))
+            .bind(("what", image_id))
+            .query("fn::get_round_with_attempt($attempt)")
+            .await?;
+        let attempt = result
+            .take::<Option<RoundWithAttempts<Pending>>>(1)?
             .found()?;
         Ok(attempt)
     }
@@ -301,7 +320,7 @@ mod tests {
 
     use super::AttemptRepository;
     use crate::services::{
-        database::session_v3::{round::RoundRepository, tests::db, user::UserRepository},
+        database::{round::RoundRepository, tests::db, user::UserRepository},
         gamemodes::Mode,
         provider::Provider,
     };
@@ -368,7 +387,21 @@ mod tests {
             .unwrap();
 
         sut.upload_active_attempt(&user).await.unwrap();
-        sut.approve_uploaded_attempt(&user, &user, 0).await.unwrap();
+        sut.approve_uploaded_attempt(&user, 0).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_pending_attempt() {
+        let (users, rounds, sut) = setup().await;
+        let user = users.create_or_update_user(0, "").await.unwrap();
+        rounds
+            .attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(-60 * 60))
+            .await
+            .unwrap();
+
+        sut.upload_active_attempt(&user).await.unwrap();
+        sut.moderate_uploaded_attempt(&user, 0).await.unwrap();
+        sut.get_pending_attempt(0).await.unwrap();
     }
 
     #[tokio::test]

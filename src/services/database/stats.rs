@@ -22,8 +22,8 @@ where
 
 #[derive(Debug, Deserialize)]
 pub struct ActiveUser {
-    user: Record<User>,
-    round: Record<Round>,
+    pub user: Record<User>,
+    pub round: Record<Round>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -80,7 +80,7 @@ impl StatsRepository {
 mod tests {
     use super::StatsRepository;
     use crate::services::{
-        database::session_v3::{
+        database::{
             attempt::AttemptRepository, round::RoundRepository, tests::db, user::UserRepository,
         },
         gamemodes::Mode,
@@ -126,10 +126,7 @@ mod tests {
         attempts.upload_active_attempt(&user1).await.unwrap();
         attempts.moderate_uploaded_attempt(&user1, 1).await.unwrap();
         attempts.upload_active_attempt(&user2).await.unwrap();
-        attempts
-            .approve_uploaded_attempt(&user2, &user2, 2)
-            .await
-            .unwrap();
+        attempts.approve_uploaded_attempt(&user2, 2).await.unwrap();
 
         let active_users = sut.get_active_users().await.unwrap();
 
@@ -150,10 +147,7 @@ mod tests {
             .await
             .unwrap();
         attempts.upload_active_attempt(&user).await.unwrap();
-        let round = attempts
-            .approve_uploaded_attempt(&user, &user, 0)
-            .await
-            .unwrap();
+        let round = attempts.approve_uploaded_attempt(&user, 0).await.unwrap();
         rounds
             .forward_complete_round(&round.round, &round.attempt, round.round.forward())
             .await

@@ -191,16 +191,18 @@ impl RoundRepository {
 
     pub async fn get_active_round(
         &self,
-        user_id: u64,
-    ) -> DbResult<Option<RoundWithAttempts<Active>>> {
+        user: &Record<User>,
+    ) -> DbResult<RoundWithAttempts<Active>> {
         let mut result = self
             .db
-            .query("let $attempt = select * from only attempt where meta::id(in) is $user_id and state.type is $state_type")
-            .bind(("user_id", user_id))
+            .query("let $attempt = select * from only attempt where in is $user and state.type is $state_type")
+            .bind(("user", &user.id))
             .bind(("state_type", "Active"))
             .query("fn::try_get_round_with_attempt($attempt)")
             .await?;
-        let round = result.take::<Option<RoundWithAttempts<Active>>>(1)?;
+        let round = result
+            .take::<Option<RoundWithAttempts<Active>>>(1)?
+            .found()?;
         Ok(round)
     }
 }
@@ -211,7 +213,7 @@ mod tests {
 
     use super::RoundRepository;
     use crate::services::{
-        database::session_v3::{attempt::AttemptRepository, tests::db, user::UserRepository},
+        database::{attempt::AttemptRepository, tests::db, user::UserRepository},
         gamemodes::Mode,
         provider::Provider,
     };
@@ -229,7 +231,7 @@ mod tests {
         sut.attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(0))
             .await
             .unwrap();
-        sut.get_active_round(0).await.unwrap().unwrap();
+        sut.get_active_round(&user).await.unwrap();
     }
 
     #[tokio::test]
@@ -311,10 +313,7 @@ mod tests {
             .await
             .unwrap();
         attempts.upload_active_attempt(&user).await.unwrap();
-        let round = attempts
-            .approve_uploaded_attempt(&user, &user, 0)
-            .await
-            .unwrap();
+        let round = attempts.approve_uploaded_attempt(&user, 0).await.unwrap();
         sut.forward_complete_round(&round.round, &round.attempt, round.round.forward())
             .await
             .unwrap();

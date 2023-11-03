@@ -2,7 +2,9 @@ use crate::app::{
     error::ConvertError, response::ResponseContext, util::respond_with_prompt, AppContext, AppError,
 };
 use rossbot::services::{
-    database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker,
+    database::{attempt::AttemptRepository, round::RoundRepository, user::UserRepository},
+    provider::Provider,
+    status_update::StatusUpdateWaker,
 };
 use tracing::error;
 
@@ -20,14 +22,23 @@ pub async fn current(ctx: AppContext<'_>) -> Result<(), AppError> {
 }
 
 async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(), AppError> {
-    let sr: SessionRepository = ctx.data().get();
-    let uid = ctx.author().id.0;
-    sr.stop_expired()
+    let ar: AttemptRepository = ctx.data().get();
+    let ur: UserRepository = ctx.data().get();
+    let rr: RoundRepository = ctx.data().get();
+    let user = ctx.author();
+    let user = ur
+        .create_or_update_user(user.id.0, &user.name)
+        .await
+        .map_internal("Failed to update user")?;
+    ar.expire_active_attempts()
         .await
         .map_internal("Failed to unlock expired sessions")?;
     let waker: StatusUpdateWaker = ctx.data().get();
     waker.wake();
-    let lobby = sr.get(uid).await.map_user("No current game")?;
+    let lobby = rr
+        .get_active_round(&user)
+        .await
+        .map_user("No current game")?;
     respond_with_prompt(rsx, &ctx, &lobby, false).await?;
     Ok(())
 }

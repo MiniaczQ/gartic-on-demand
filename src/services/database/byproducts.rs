@@ -43,7 +43,7 @@ impl ByproductsRepository {
 mod tests {
     use super::ByproductsRepository;
     use crate::services::{
-        database::session_v3::{
+        database::{
             attempt::AttemptRepository, round::RoundRepository, tests::db, user::UserRepository,
         },
         gamemodes::Mode,
@@ -80,10 +80,7 @@ mod tests {
                 .await
                 .unwrap();
             attempts.upload_active_attempt(&user).await.unwrap();
-            let round = attempts
-                .approve_uploaded_attempt(&user, &user, i)
-                .await
-                .unwrap();
+            let round = attempts.approve_uploaded_attempt(&user, i).await.unwrap();
             rounds
                 .forward_complete_round(&round.round, &round.attempt, round.round.forward())
                 .await

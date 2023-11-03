@@ -67,7 +67,7 @@ impl UserRepository {
         Ok(user)
     }
 
-    async fn get_user(&self, id: u64) -> DbResult<Record<User>> {
+    pub async fn get_user(&self, id: u64) -> DbResult<Record<User>> {
         let mut result = self
             .db
             .query("select * from only user where meta::id(id) is $id")
@@ -81,7 +81,7 @@ impl UserRepository {
 #[cfg(test)]
 mod tests {
     use super::UserRepository;
-    use crate::services::{database::session_v3::tests::db, provider::Provider};
+    use crate::services::{database::tests::db, provider::Provider};
 
     async fn setup() -> UserRepository {
         let db = db().await;

@@ -2,14 +2,17 @@ use crate::app::{
     config::CONFIG,
     error::ConvertError,
     permission::is_trusted,
-    rendering::{LobbyRenderer, ModeRenderer},
+    rendering::{ModeRenderer, RoundRenderer},
     response::ResponseContext,
     util::respond_with_prompt,
     AppContext, AppError,
 };
 use poise::serenity_prelude::{Attachment, ReactionType};
 use rossbot::services::{
-    database::session::SessionRepository, provider::Provider, status_update::StatusUpdateWaker,
+    database::{attempt::AttemptRepository, round::RoundRepository, user::UserRepository},
+    gamemodes::GameLogic,
+    provider::Provider,
+    status_update::StatusUpdateWaker,
 };
 use tracing::error;
 
@@ -34,50 +37,60 @@ async fn process(
     ctx: AppContext<'_>,
     attachment: Attachment,
 ) -> Result<(), AppError> {
-    let sr: SessionRepository = ctx.data().get();
-    let user = ctx.author();
-    let uid = user.id.0;
+    let ar: AttemptRepository = ctx.data().get();
+    let ur: UserRepository = ctx.data().get();
+    let rr: RoundRepository = ctx.data().get();
+    let discord_user = ctx.author();
+    let user = ur
+        .create_or_update_user(discord_user.id.0, &discord_user.name)
+        .await
+        .map_internal("Failed to update user")?;
 
-    let lobby = sr
-        .start_submitting(uid)
+    let round = ar
+        .upload_active_attempt(&user)
         .await
         .map_internal("Failed to find existing session")?;
 
-    let trusted = is_trusted(&ctx, user).await?;
+    let trusted = is_trusted(&ctx, discord_user).await?;
 
     if trusted {
-        let (channel, attachment, content) = if lobby.active.last {
-            let channel = match lobby.lobby.nsfw {
-                true => CONFIG.channels.complete_nsfw,
-                false => CONFIG.channels.complete,
+        let (channel, attachment, content) =
+            if round.round.round_no == round.round.mode.last_round() {
+                let channel = match round.round.nsfw {
+                    true => CONFIG.channels.complete_nsfw,
+                    false => CONFIG.channels.complete,
+                };
+                let attachment = round
+                    .round
+                    .mode
+                    .render_complete_image(&ctx, &round, &ctx.data().get(), &attachment)
+                    .await?;
+                let content = round.render_complete_text();
+                (channel, attachment, content)
+            } else {
+                let channel = match round.round.nsfw {
+                    true => CONFIG.channels.partial_nsfw,
+                    false => CONFIG.channels.partial,
+                };
+                let attachment = round.round.mode.render_partial_image(&attachment).await?;
+                let content = round.render_partial_text();
+                (channel, attachment, content)
             };
-            let attachment = lobby
-                .active
-                .mode
-                .render_complete_image(&ctx, &lobby, &ctx.data().get(), &attachment)
-                .await?;
-            let content = lobby.render_complete_text();
-            (channel, attachment, content)
-        } else {
-            let channel = match lobby.lobby.nsfw {
-                true => CONFIG.channels.partial_nsfw,
-                false => CONFIG.channels.partial,
-            };
-            let attachment = lobby.active.mode.render_partial_image(&attachment).await?;
-            let content = lobby.render_partial_text();
-            (channel, attachment, content)
-        };
 
         let message = channel
             .send_message(ctx, |m| m.add_file(attachment).content(content))
             .await?;
-        sr.finish_submitting_trusted(uid, message.id.0)
+        let round = ar
+            .approve_uploaded_attempt(&user, message.id.0)
             .await
             .map_internal("Failed to attach image")?;
+        rr.forward_complete_round(&round.round, &round.attempt, round.round.forward())
+            .await
+            .map_internal("Failed to forward round")?;
     } else {
         let channel = CONFIG.channels.moderation;
-        let attachment = lobby.active.mode.render_partial_image(&attachment).await?;
-        let content = lobby.render_partial_text();
+        let attachment = round.round.mode.render_partial_image(&attachment).await?;
+        let content = round.render_partial_text();
         let message = channel
             .send_message(ctx, |m| {
                 m.add_file(attachment).content(content).reactions([
@@ -86,7 +99,7 @@ async fn process(
                 ])
             })
             .await?;
-        sr.finish_submitting_untrusted(uid, message.id.0)
+        ar.moderate_uploaded_attempt(&user, message.id.0)
             .await
             .map_internal("Failed to attach image")?;
     }
@@ -94,17 +107,18 @@ async fn process(
     rsx.respond(|f| f.content("Submited!")).await?;
     rsx.reset();
 
-    if lobby.active.last {
+    if round.round.round_no == round.round.mode.last_round() {
         rsx.respond(|b| b.content("This was the final round.\nUse `/start` to play again."))
             .await?;
     } else {
-        let next_round = lobby.active.round + 1;
-        let mode = lobby.lobby.mode;
-        let nsfw = lobby.lobby.nsfw;
-        if let Ok(lobby) = sr.find_attach(uid, mode, next_round, nsfw, false).await {
-            respond_with_prompt(rsx, &ctx, &lobby, false).await?;
-        } else if let Ok(lobby) = sr.find_attach(uid, mode, next_round, nsfw, true).await {
-            respond_with_prompt(rsx, &ctx, &lobby, false).await?;
+        let round_no = round.round.round_no + 1;
+        let mode = round.round.mode;
+        let nsfw = round.round.nsfw;
+        if let Ok(round) = rr
+            .attempt_existing_round(&user, mode, nsfw, round_no, mode.time_limit(round_no))
+            .await
+        {
+            respond_with_prompt(rsx, &ctx, &round, false).await?;
         } else {
             rsx.respond(|b| {
                 b.content("No further rounds available currently.\nUse `/start` to play again.")
