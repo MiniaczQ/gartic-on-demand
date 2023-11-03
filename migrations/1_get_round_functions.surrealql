@@ -2,7 +2,7 @@ define function fn::get_round(
 	$round: object,
 ) {
     let $previous = select value <-previous<-attempt as attempt from only $round fetch attempt;
-    let $previous = select * from $previous order by started_at;
+    let $previous = select * from $previous order by created_at;
     {
         round: $round,
         previous: $previous

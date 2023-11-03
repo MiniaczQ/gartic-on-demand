@@ -126,7 +126,7 @@ impl RoundRepository {
             .bind(("round", round))
             .query("relate ($previous_round<-previous.in) -> previous -> $round")
             .bind(("previous_round", &previous_round.id))
-            .query("relate only $round -> previous -> $round")
+            .query("relate only $previous_attempt -> previous -> $round")
             .bind(("previous_attempt", &attempt.id))
             .query("commit")
             .query("fn::get_round($round)")
@@ -176,15 +176,21 @@ impl RoundRepository {
             .bind(("mode", mode))
             .bind(("nsfw", nsfw))
             .bind(("round_no", round_no))
-            .query("let $round = select * from only $random order by previously_participated limit 1")
-            .query("let $attempt = relate only $user -> attempt -> $round content $attempt")
+            .query(
+                r"
+                let $attempt_result = if array::any($random) {
+                    let $round = select * from only $random order by previously_participated limit 1;
+                    return relate only $user -> attempt -> $round content $attempt;
+                }
+                "
+            )
             .bind(("attempt", attempt))
             .query("commit")
-            .query("fn::get_round_with_attempt($attempt)")
+            .query("fn::try_get_round_with_attempt($attempt_result)")
             .await?
-            .better_check()?;
+        .better_check()?;
         let round = result
-            .take::<Option<RoundWithAttempts<Active>>>(3)?
+            .take::<Option<RoundWithAttempts<Active>>>(2)?
             .found()?;
         Ok(round)
     }
@@ -209,14 +215,13 @@ impl RoundRepository {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
-
     use super::RoundRepository;
     use crate::services::{
-        database::{attempt::AttemptRepository, tests::db, user::UserRepository},
+        database::{attempt::AttemptRepository, tests::db, user::UserRepository, DbError},
         gamemodes::Mode,
         provider::Provider,
     };
+    use chrono::Duration;
 
     async fn setup() -> (UserRepository, AttemptRepository, RoundRepository) {
         let db = db().await;
@@ -262,9 +267,11 @@ mod tests {
         sut.attempt_new_round(&user, mode, nsfw, 1, time_limit)
             .await
             .unwrap();
-        sut.attempt_existing_round(&user, mode, nsfw, 0, time_limit)
+        let error = sut
+            .attempt_existing_round(&user, mode, nsfw, 0, time_limit)
             .await
             .unwrap_err();
+        assert!(matches!(error, DbError::NotFound))
     }
 
     #[tokio::test]
@@ -308,7 +315,26 @@ mod tests {
         let mode = Mode::Ross;
         let nsfw = false;
         let time_limit = Duration::seconds(0);
+        sut.attempt_new_round(&user, mode, nsfw, 2, time_limit)
+            .await
+            .unwrap();
+        attempts.upload_active_attempt(&user).await.unwrap();
+        let round = attempts.approve_uploaded_attempt(&user, 0).await.unwrap();
 
+        sut.forward_complete_round(&round.round, &round.attempt, round.round.forward())
+            .await
+            .unwrap();
+    }
+
+    #[tracing_test::traced_test]
+    #[tokio::test]
+    #[ignore = "Only use with docker, in memory overflows stack"]
+    async fn second_round() {
+        let (users, attempts, sut) = setup().await;
+        let user = users.create_or_update_user(0, "").await.unwrap();
+        let mode = Mode::Ross;
+        let nsfw = false;
+        let time_limit = Duration::seconds(0);
         sut.attempt_new_round(&user, mode, nsfw, 2, time_limit)
             .await
             .unwrap();
@@ -317,5 +343,12 @@ mod tests {
         sut.forward_complete_round(&round.round, &round.attempt, round.round.forward())
             .await
             .unwrap();
+
+        let result = sut
+            .attempt_existing_round(&user, mode, nsfw, 1, time_limit)
+            .await
+            .unwrap();
+
+        assert_eq!(result.previous.len(), 1);
     }
 }

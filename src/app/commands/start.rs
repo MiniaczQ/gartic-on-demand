@@ -49,12 +49,13 @@ async fn process(
     round: Option<u64>,
     nsfw: Option<bool>,
 ) -> Result<(), AppError> {
+    let round_no = round.unwrap_or(1).sub(1);
+    let nsfw = nsfw.unwrap_or(false);
+
     let ar: AttemptRepository = ctx.data().get();
     let ur: UserRepository = ctx.data().get();
     let rr: RoundRepository = ctx.data().get();
     let user = ctx.author();
-    let round_no = round.unwrap_or(1).sub(1);
-    let nsfw = nsfw.unwrap_or(false);
 
     if nsfw && !is_adult(&ctx, user).await? {
         rsx.respond(|b| b.content("You need the `+18` role to participate in NSFW games."))
@@ -109,7 +110,7 @@ async fn find_or_create_session(
             .attempt_new_round(user, mode, nsfw, mode.multiplex(round_no), time_limit)
             .await
             .map_internal("Failed to create game session")?,
-        (e, _) => e.map_user("Did not find pending sessions")?,
+        (Err(e), _) => Err(e).map_user("Did not find pending sessions")?,
     };
 
     Ok(round)

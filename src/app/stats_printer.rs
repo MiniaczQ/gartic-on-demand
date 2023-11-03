@@ -12,6 +12,7 @@ use rossbot::services::{
         stats::{ActiveUser, StatsRepository, UnallocatedRound},
         Database,
     },
+    gamemodes::GameLogic,
     provider::Provider,
     status_update::StatusUpdateWaiter,
 };
@@ -103,7 +104,9 @@ impl StatsPrinter {
             .sr
             .get_unallocated_rounds()
             .await
-            .map_internal("Failed to fetch incomplete games")?
+            .map_internal("Failed to fetch incomplete games")?;
+        unallocated.retain(|u| u.round_no > 0 && u.round_no <= u.mode.last_round());
+        let mut unallocated = unallocated
             .iter()
             .map(Self::unallocated_round_to_string)
             .collect::<Vec<_>>()
@@ -116,7 +119,7 @@ impl StatsPrinter {
 
     fn unallocated_round_to_string(round: &UnallocatedRound) -> String {
         format!(
-            "- {}{:?} round {} - available {}",
+            "- {}{:?} mode round {} - available {}",
             if round.nsfw { "NSFW " } else { "" },
             round.mode,
             round.round_no + 1,
@@ -144,7 +147,7 @@ impl StatsPrinter {
 
     fn active_user_to_string(user: &ActiveUser) -> String {
         format!(
-            "- <@{}> - {}{:?} round {}",
+            "- <@{}> - {}{:?} mode round {}",
             user.user.id(),
             if user.round.nsfw { "NSFW " } else { "" },
             user.round.mode,
