@@ -133,7 +133,7 @@ impl StatsPrinter {
             .get_active_users()
             .await
             .map_internal("Failed to fetch active users")?;
-        self.update_activity(&active, activity).await?;
+        self.update_activity(!active.is_empty(), activity).await?;
         let mut active = active
             .iter()
             .map(Self::active_user_to_string)
@@ -155,13 +155,17 @@ impl StatsPrinter {
         )
     }
 
+    fn cooldown() -> DateTime<Utc> {
+        Utc::now() + Duration::from_secs(300)
+    }
+
     async fn update_activity(
         &mut self,
-        active: &Vec<ActiveUser>,
+        active: bool,
         activity: &mut Activity,
     ) -> Result<(), AppError> {
-        match (active.is_empty(), &*activity) {
-            (false, Activity::None) => {
+        match (active, &mut *activity) {
+            (true, Activity::None) => {
                 let now = Utc::now();
                 let content = format!(
                     "Activity detected at <t:{}> <@&{}>!",
@@ -175,14 +179,16 @@ impl StatsPrinter {
                     .await?;
                 *activity = Activity::Active(message);
             }
-            (true, Activity::Active(message)) => {
-                message.delete(&self.ctx).await?;
-                *activity = Activity::Cooldown(Utc::now() + Duration::from_secs(300));
-            }
-            (false, Activity::Cooldown(until)) => {
+            (true, Activity::Cooldown(until)) => {
                 if Utc::now() > *until {
                     *activity = Activity::None;
+                } else {
+                    *until = Self::cooldown();
                 }
+            }
+            (false, Activity::Active(message)) => {
+                message.delete(&self.ctx).await?;
+                *activity = Activity::Cooldown(Self::cooldown());
             }
             _ => {}
         };
