@@ -61,7 +61,7 @@ impl StatsPrinter {
             .send_message(&self.ctx, |b| b.embed(|b| b.description("Setting up...")))
             .await?;
 
-        let mut activity = Activity::None;
+        let mut activity = Activity::Cooldown(Self::cooldown());
 
         loop {
             self.loop_body(&mut activity, &mut message).await?;
