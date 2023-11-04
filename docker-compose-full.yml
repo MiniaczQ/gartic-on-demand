@@ -21,14 +21,15 @@ services:
     environment:
       database__address: ws://surrealdb:8000
     build: .
+    depends_on:
+      - surrealdb
     profiles:
       - main
 
   backup:
     image: surrealdb/surrealdb:1.0.0
-    hostname: surrealdb
-    entrypoint: /surreal backup ws://surrealdb:8000 ./backup
+    entrypoint: /surreal backup http://surrealdb:8000 ./backups/latest.db
     volumes:
-      - ./backups/latest:/backup
+      - ./backups:/backups
     profiles:
       - backup

@@ -16,6 +16,7 @@ RUN --mount=type=cache,target=/app/target \
 
 
 FROM debian:12.2-slim AS final
+RUN apt-get update && apt-get upgrade -y && apt-get install libssl3 -y
 WORKDIR /app/
 COPY --from=build /app/gartic-bot /app
 COPY ./config.json /app
