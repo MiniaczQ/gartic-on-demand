@@ -12,17 +12,17 @@ impl GameLogic for Evolution {
 
     fn time_limit(&self, round_no: u64) -> Duration {
         match round_no {
-            0 => Duration::seconds(600),
-            1 => Duration::seconds(900),
-            _ => Duration::seconds(1200),
+            0 => Duration::seconds(1800),
+            1 => Duration::seconds(2700),
+            _ => Duration::seconds(3600),
         }
     }
 
     fn prompt(&self, round_no: u64) -> &'static str {
         match round_no {
-            0 => "Draw the unevolved entity. (Keep it simple)",
-            1 => "Draw the first evolution.",
-            _ => "Draw the final evolution.",
+            0 => "Draw the first, base evolution",
+            1 => "Draw the second evolution.",
+            _ => "Draw the third, final evolution.",
         }
     }
 
