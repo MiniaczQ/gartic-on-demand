@@ -1,23 +1,11 @@
-# RossBot
+# Gartic On Demand
 
-A discord bot for asynchronous custom Gartic Phone modes gameplay.
+A discord bot for asynchronous Gartic Phone custom modes.
 
-Currently supported modes:
-- Rossmode - character creation from attributes
+Currently implemented modes:
+- Rossmode - First 4 rounds create attributes, 5th round create a character with given attributes.
+- Evolution - First round create a base evolution, rounds 2-3 evolve the provided creature.
 
-# Infrastructure
+# About
 
-Discord bot in Rust using poise.
-Surrealdb as game logic storage.
-Discord as UI and image store.
-
-# Unordered roadmap
-
-- [x] MVP - Playable Ross mode
-- [x] Upgrade database schema - don't match players with matches they previously played
-- [x] Moderation layer - permission and filtration of invalid submissions
-- [x] Auxilary commands - get incomplete games, fetch random attributes, etc.
-- [ ] Refactor internals for multiple gamemodes
-- [ ] Add reroll command
-- [ ] Add Evolution mode and NSFW variants
-- [ ] Game tagging system - theme a game around a topic (b&w, landscape, monster, etc.)
+The bot is made using `poise` framework, uses a discord server as image storage/interface and `surrealdb` as the games database.
