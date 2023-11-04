@@ -31,5 +31,7 @@ services:
     entrypoint: /surreal backup http://surrealdb:8000 ./backups/latest.db
     volumes:
       - ./backups:/backups
+    depends_on:
+      - surrealdb
     profiles:
       - backup
