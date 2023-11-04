@@ -1,6 +1,6 @@
 use crate::services::provider::Provider;
 
-use super::{Database, DbResult, IdConvert, MapToNotFound, RawRecord, Record};
+use super::{Database, DbResult, MapToNotFound, Record};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -14,14 +14,16 @@ pub enum AssetKind {
 pub struct Asset {
     pub kind: AssetKind,
     pub author: u64,
+    pub submitter: u64,
     pub created_at: DateTime<Utc>,
 }
 
 impl Asset {
-    pub fn new(kind: AssetKind, uid: u64) -> Self {
+    pub fn new(kind: AssetKind, uid: u64, aid: u64) -> Self {
         Self {
             kind,
             author: uid,
+            submitter: aid,
             created_at: Utc::now(),
         }
     }
@@ -36,7 +38,7 @@ impl ImageRepository {
 
     pub async fn create(&self, id: u64, entry: Asset) -> DbResult<()> {
         self.db
-            .create::<Option<RawRecord>>((Self::TABLE, id))
+            .create::<Option<Record>>((Self::TABLE, id))
             .content(entry)
             .await?
             .ok_or(super::DbError::NotFound)?;
@@ -46,7 +48,7 @@ impl ImageRepository {
 
     pub async fn delete(&self, id: u64) -> DbResult<()> {
         self.db
-            .delete::<Option<RawRecord>>((Self::TABLE, id))
+            .delete::<Option<Record>>((Self::TABLE, id))
             .await?
             .found()?;
 
@@ -61,7 +63,7 @@ impl ImageRepository {
             .bind(("kind", kind))
             .bind(("limit", n))
             .await?;
-        let images = result.take::<Vec<RawRecord<Asset>>>(0)?.convert_id()?;
+        let images = result.take::<Vec<Record<Asset>>>(0)?;
         Ok(images)
     }
 }

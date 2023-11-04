@@ -1,3 +1,6 @@
 /target
 .env
-/data
+surreal
+backups
+logs
+discord-bot.tar

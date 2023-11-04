@@ -3,14 +3,15 @@ use crate::app::{
 };
 use gartic_bot::services::{
     database::{attempt::AttemptRepository, round::RoundRepository, user::UserRepository},
+    gamemodes::GameLogic,
     provider::Provider,
     status_update::StatusUpdateWaker,
 };
 use tracing::error;
 
-/// Get current game session
+/// Reroll the current prompt
 #[poise::command(slash_command, guild_only)]
-pub async fn current(ctx: AppContext<'_>) -> Result<(), AppError> {
+pub async fn reroll(ctx: AppContext<'_>) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);
     rsx.init().await?;
     if let Err(e) = process(&mut rsx, ctx).await {
@@ -25,20 +26,38 @@ async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(
     let ar: AttemptRepository = ctx.data().get();
     let ur: UserRepository = ctx.data().get();
     let rr: RoundRepository = ctx.data().get();
-    let user = ctx.author();
+    let discord_user = ctx.author();
     let user = ur
-        .create_or_update_user(user.id.0, &user.name)
+        .create_or_update_user(discord_user.id.0, &discord_user.name)
         .await
         .map_internal("Failed to update user")?;
-    ar.expire_active_attempts()
-        .await
-        .map_internal("Failed to unlock expired sessions")?;
-    let waker: StatusUpdateWaker = ctx.data().get();
-    waker.wake();
-    let lobby = rr
+
+    let round = rr
         .get_active_round(&user)
         .await
-        .map_user("No current game")?;
-    respond_with_prompt(rsx, &ctx, &lobby, false).await?;
+        .map_user("Failed to find existing session")?;
+
+    ar.cancel_active_attempt(&user)
+        .await
+        .map_internal("Failed to cancel active session")?;
+
+    if let Ok(round) = rr
+        .attempt_existing_round(
+            &user,
+            round.round.mode,
+            round.round.nsfw,
+            round.round.round_no,
+            round.round.mode.time_limit(round.round.round_no),
+        )
+        .await
+    {
+        respond_with_prompt(rsx, &ctx, &round, false).await?;
+    } else {
+        rsx.respond(|b| b.content("No rounds available currently.\nUse `/start` to play again."))
+            .await?
+    }
+
+    let waker: StatusUpdateWaker = ctx.data().get();
+    waker.wake();
     Ok(())
 }

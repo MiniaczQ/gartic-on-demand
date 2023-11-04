@@ -1,0 +1,2 @@
+define param $allocating_state_types value ["Active", "Uploading", "Pending", "Approved"];
+define param $active_state_types value ["Active", "Uploading", "Pending"];

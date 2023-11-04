@@ -1,10 +1,9 @@
+pub mod evolution;
 pub mod ross;
 
-use self::ross::Ross;
+use self::{evolution::Evolution, ross::Ross};
+use chrono::Duration;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
-
-use super::database::session::SubmissionKind;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GameSession {
@@ -28,39 +27,44 @@ impl GameSession {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum Mode {
     Ross,
+    Evolution,
 }
 
 impl GameLogic for Mode {
     fn last_round(&self) -> u64 {
         match self {
             Mode::Ross => Ross.last_round(),
+            Mode::Evolution => Evolution.last_round(),
         }
     }
 
-    fn time_limit(&self, round: u64) -> Duration {
+    fn time_limit(&self, round_no: u64) -> Duration {
         match self {
-            Mode::Ross => Ross.time_limit(round),
+            Mode::Ross => Ross.time_limit(round_no),
+            Mode::Evolution => Evolution.time_limit(round_no),
         }
     }
 
-    fn submission_kind(&self, round: u64) -> SubmissionKind {
+    fn prompt(&self, round_no: u64) -> &'static str {
         match self {
-            Mode::Ross => Ross.submission_kind(round),
+            Mode::Ross => Ross.prompt(round_no),
+            Mode::Evolution => Evolution.prompt(round_no),
         }
     }
 
-    fn prompt(&self, round: u64) -> &'static str {
+    fn multiplex(&self, round_no: u64) -> u64 {
         match self {
-            Mode::Ross => Ross.prompt(round),
+            Mode::Ross => Ross.multiplex(round_no),
+            Mode::Evolution => Evolution.multiplex(round_no),
         }
     }
 }
 
 pub trait GameLogic {
     fn last_round(&self) -> u64;
-    fn submission_kind(&self, round: u64) -> SubmissionKind;
-    fn time_limit(&self, round: u64) -> Duration;
-    fn prompt(&self, round: u64) -> &'static str;
+    fn time_limit(&self, round_no: u64) -> Duration;
+    fn prompt(&self, round_no: u64) -> &'static str;
+    fn multiplex(&self, round_no: u64) -> u64;
 }
 
 #[derive(Debug, thiserror::Error)]

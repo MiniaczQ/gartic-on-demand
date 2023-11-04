@@ -1,6 +1,9 @@
 {
     "discord_token": "",
     "guild": 1158047496023588984,
+    "messages": {
+        "notify": 1167945468760834109
+    },
     "channels": {
         "draw_this": 1161664139945582652,
         "in_contruction": 1161674543446884412,
@@ -15,7 +18,9 @@
     "roles": {
         "admin": 1159068106635874405,
         "moderator": 1159068195563507764,
-        "trusted": 1163097482910244915
+        "trusted": 1163097482910244915,
+        "adult": 1163112765486014524,
+        "notify": 1167940311524315147
     },
     "reactions": {
         "accept": "✔",
@@ -28,7 +33,9 @@
         "height": 424
     },
     "log": {
-        "directives": "warn,rossbot=trace,surrealdb=debug,rossbot::app::stats_printer=error"
+        "directives": "warn,rossbot=trace,surrealdb=debug,rossbot::app::stats_printer=error",
+        "console": true,
+        "json": "logs"
     },
     "database": {
         "address": "ws://127.0.0.1:8000",
@@ -37,5 +44,8 @@
         "migrator": {
             "migrations_dir": "./migrations"
         }
+    },
+    "notify": {
+        "cooldown": 3600
     }
 }

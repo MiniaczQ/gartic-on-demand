@@ -2,8 +2,8 @@ use crate::app::{config::CONFIG, permission::has_admin};
 
 use super::{AppData, AppError, AssetHandler};
 use async_trait::async_trait;
+use gartic_bot::services::{database::assets::ImageRepository, provider::Provider};
 use poise::{Event, FrameworkContext};
-use rossbot::services::{database::assets::ImageRepository, provider::Provider};
 use serenity::prelude::Context;
 use std::cmp::Ordering;
 use tracing::error;

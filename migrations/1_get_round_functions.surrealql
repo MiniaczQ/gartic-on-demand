@@ -1,0 +1,32 @@
+define function fn::get_round(
+	$round: object,
+) {
+    let $previous = select value <-previous<-attempt as attempt from only $round fetch attempt;
+    let $previous = select * from $previous order by created_at;
+    {
+        round: $round,
+        previous: $previous
+    }
+};
+
+define function fn::get_round_with_attempt(
+	$attempt: object,
+) {
+    let $round = select value out as round from only $attempt fetch round;
+    let $round = fn::get_round($round);
+    {
+        attempt: $attempt,
+        round: $round.round,
+        previous: $round.previous
+    }
+};
+
+define function fn::try_get_round_with_attempt(
+	$attempt: option<object>,
+) {
+	return if $attempt is none {
+        none
+    } else {
+        fn::get_round_with_attempt($attempt)
+    }
+};

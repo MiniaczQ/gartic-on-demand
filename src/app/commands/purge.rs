@@ -4,7 +4,7 @@ use crate::app::{
 use chrono::Utc;
 use tracing::error;
 
-/// Show incomplete games in which you can participate through `round` parameter in `/start` command
+/// Prints the purge message
 #[poise::command(slash_command, guild_only)]
 pub async fn purge(ctx: AppContext<'_>) -> Result<(), AppError> {
     let mut rsx = ResponseContext::new(ctx);

@@ -1,0 +1,37 @@
+version: '3'
+
+services:
+  surrealdb:
+    image: surrealdb/surrealdb:1.0.0
+    hostname: surrealdb
+    environment:
+      SURREAL_AUTH: false
+      SURREAL_STRICT: false
+      SURREAL_NO_BANNER: true
+      SURREAL_LOG: info
+      SURREAL_PATH: file://data
+    entrypoint: /surreal start
+    volumes:
+      - ./surreal:/data
+    profiles:
+      - main
+
+  gartic-bot:
+    image: miniaczq/gartic-bot
+    environment:
+      database__address: ws://surrealdb:8000
+    build: .
+    depends_on:
+      - surrealdb
+    profiles:
+      - main
+
+  backup:
+    image: surrealdb/surrealdb:1.0.0
+    entrypoint: /surreal backup http://surrealdb:8000 ./backups/latest.db
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      - surrealdb
+    profiles:
+      - backup
