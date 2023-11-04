@@ -1,12 +1,12 @@
 use std::borrow::Cow;
 
 use async_trait::async_trait;
-use poise::serenity_prelude::{Attachment, AttachmentType};
-use rossbot::services::{
+use gartic_bot::services::{
     database::{assets::ImageRepository, attempt::Active, round::RoundWithAttempts, ThingToU64},
     gamemodes::{evolution::Evolution, ross::Ross, Mode},
     image_processing::{concat_vertical, normalize_image_aoi, RgbaConvert},
 };
+use poise::serenity_prelude::{Attachment, AttachmentType};
 use serenity::http::Http;
 
 use super::{

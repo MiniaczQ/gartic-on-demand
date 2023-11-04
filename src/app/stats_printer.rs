@@ -5,8 +5,7 @@ use super::{
     error::{AppError, ConvertError},
 };
 use chrono::{DateTime, Utc};
-use poise::serenity_prelude::Message;
-use rossbot::services::{
+use gartic_bot::services::{
     database::{
         attempt::AttemptRepository,
         stats::{ActiveUser, StatsRepository, UnallocatedRound},
@@ -16,6 +15,7 @@ use rossbot::services::{
     provider::Provider,
     status_update::StatusUpdateWaiter,
 };
+use poise::serenity_prelude::Message;
 use serenity::prelude::Context;
 use tracing::{error, info};
 

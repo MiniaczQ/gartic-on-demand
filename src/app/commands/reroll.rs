@@ -1,7 +1,7 @@
 use crate::app::{
     error::ConvertError, response::ResponseContext, util::respond_with_prompt, AppContext, AppError,
 };
-use rossbot::services::{
+use gartic_bot::services::{
     database::{attempt::AttemptRepository, round::RoundRepository, user::UserRepository},
     gamemodes::GameLogic,
     provider::Provider,
@@ -53,10 +53,8 @@ async fn process(rsx: &mut ResponseContext<'_>, ctx: AppContext<'_>) -> Result<(
     {
         respond_with_prompt(rsx, &ctx, &round, false).await?;
     } else {
-        rsx.respond(|b| {
-            b.content("No rounds available currently.\nUse `/start` to play again.")
-        })
-        .await?
+        rsx.respond(|b| b.content("No rounds available currently.\nUse `/start` to play again."))
+            .await?
     }
 
     let waker: StatusUpdateWaker = ctx.data().get();

@@ -7,13 +7,13 @@ use crate::app::{
     util::respond_with_prompt,
     AppContext, AppError,
 };
-use poise::serenity_prelude::{Attachment, ReactionType};
-use rossbot::services::{
+use gartic_bot::services::{
     database::{attempt::AttemptRepository, round::RoundRepository, user::UserRepository},
     gamemodes::GameLogic,
     provider::Provider,
     status_update::StatusUpdateWaker,
 };
+use poise::serenity_prelude::{Attachment, ReactionType};
 use tracing::error;
 
 /// Submit an image to the current game session

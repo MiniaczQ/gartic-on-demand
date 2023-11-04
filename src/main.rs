@@ -11,8 +11,8 @@ use app::{
     stats_printer::StatsPrinter,
     AppData,
 };
+use gartic_bot::services::{provider::Provider, status_update::status_update_pair};
 use poise::{serenity_prelude::Ready, Event, Framework, FrameworkContext};
-use rossbot::services::{provider::Provider, status_update::status_update_pair};
 use serenity::prelude::{Context, GatewayIntents};
 use std::{future::Future, pin::Pin};
 use tokio::spawn;

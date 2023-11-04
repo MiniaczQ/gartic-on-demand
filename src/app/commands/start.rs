@@ -5,7 +5,7 @@ use crate::app::{
     util::respond_with_prompt,
     AppContext,
 };
-use rossbot::services::{
+use gartic_bot::services::{
     database::{
         attempt::{Active, AttemptRepository},
         round::{RoundRepository, RoundWithAttempts},

@@ -2,12 +2,12 @@ use crate::app::{
     config::CONFIG, error::ConvertError, permission::has_admin, response::ResponseContext,
     util::fetch_image_from_attachment, AppContext, AppError,
 };
-use poise::serenity_prelude::{Attachment, AttachmentType, ChannelId, ReactionType, UserId};
-use rossbot::services::{
+use gartic_bot::services::{
     database::assets::{Asset, AssetKind, ImageRepository},
     image_processing::{normalize_image, RgbaConvert},
     provider::Provider,
 };
+use poise::serenity_prelude::{Attachment, AttachmentType, ChannelId, ReactionType, UserId};
 use std::borrow::Cow;
 use tracing::error;
 

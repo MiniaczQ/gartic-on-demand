@@ -1241,6 +1241,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "gartic-bot"
+version = "0.4.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "chrono",
+ "config",
+ "dotenv",
+ "image",
+ "lazy_static",
+ "mime",
+ "poise",
+ "reqwest",
+ "serde",
+ "serenity",
+ "sha3",
+ "surrealdb",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "tracing-test",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2856,33 +2883,6 @@ checksum = "bb6f170a4041d50a0ce04b0d2e14916d6ca863ea2e422689a5b694395d299ffe"
 dependencies = [
  "libc",
  "librocksdb-sys",
-]
-
-[[package]]
-name = "rossbot"
-version = "0.4.0"
-dependencies = [
- "async-trait",
- "bytes",
- "chrono",
- "config",
- "dotenv",
- "image",
- "lazy_static",
- "mime",
- "poise",
- "reqwest",
- "serde",
- "serenity",
- "sha3",
- "surrealdb",
- "thiserror",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "tracing-test",
 ]
 
 [[package]]

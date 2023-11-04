@@ -6,11 +6,7 @@ use super::{
     AppContext,
 };
 use bytes::Bytes;
-use image::RgbaImage;
-use mime::IMAGE_PNG;
-use poise::serenity_prelude::{Attachment, AttachmentType, ChannelId, MessageId};
-use reqwest::header::{self, HeaderValue};
-use rossbot::services::{
+use gartic_bot::services::{
     database::{
         assets::{AssetKind, ImageRepository},
         attempt::{Active, Approved, Attempt},
@@ -21,6 +17,10 @@ use rossbot::services::{
     image_processing::{concat_2_2, concat_vertical, RgbaConvert},
     provider::Provider,
 };
+use image::RgbaImage;
+use mime::IMAGE_PNG;
+use poise::serenity_prelude::{Attachment, AttachmentType, ChannelId, MessageId};
+use reqwest::header::{self, HeaderValue};
 use serenity::http::Http;
 
 pub async fn fetch_raw_image_from_attachment(attachment: &Attachment) -> Option<Bytes> {

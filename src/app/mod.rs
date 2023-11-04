@@ -1,10 +1,10 @@
 use self::{config::CONFIG, error::AppError};
-use poise::Context;
-use rossbot::services::{
+use gartic_bot::services::{
     database::{migrations::Migrator, Database},
     provider::Provider,
     status_update::StatusUpdateWaker,
 };
+use poise::Context;
 use std::error::Error;
 
 pub mod commands;

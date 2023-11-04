@@ -7,13 +7,13 @@ use crate::app::{
     util::{fetch_raw_image_from_attachment, raw_image_to_attachment},
 };
 use async_trait::async_trait;
-use poise::{Event, FrameworkContext};
-use rossbot::services::{
+use gartic_bot::services::{
     database::{attempt::AttemptRepository, user::UserRepository, ThingToU64},
     gamemodes::GameLogic,
     provider::Provider,
     status_update::StatusUpdateWaker,
 };
+use poise::{Event, FrameworkContext};
 use serenity::prelude::Context;
 use std::cmp::Ordering;
 

@@ -1,5 +1,5 @@
 use crate::app::{error::ConvertError, response::ResponseContext, AppContext, AppError};
-use rossbot::services::{
+use gartic_bot::services::{
     database::{attempt::AttemptRepository, user::UserRepository},
     provider::Provider,
     status_update::StatusUpdateWaker,

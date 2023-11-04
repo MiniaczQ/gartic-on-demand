@@ -2,6 +2,6 @@
 flowchart TD;
     Inactive -- activity --> Active
     Active -- inactivity --> Cooldown
-    Cooldown -- time --> Inactive
+    Cooldown -- time + inactivity --> Inactive
     Cooldown -- activity --> Cooldown
 ```
