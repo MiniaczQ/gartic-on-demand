@@ -8,7 +8,7 @@ services:
       SURREAL_AUTH: false
       SURREAL_STRICT: false
       SURREAL_NO_BANNER: true
-      SURREAL_LOG: info
+      SURREAL_LOG: debug
       SURREAL_PATH: file://data
     entrypoint: /surreal start
     volumes:
@@ -16,13 +16,15 @@ services:
     profiles:
       - main
 
-  gartic-bot:
-    image: miniaczq/gartic-bot
-    environment:
-      database__address: ws://surrealdb:8000
+  gartic-on-demand:
+    image: miniaczq/gartic-on-demand
+    env_file:
+      - .deployment.env
     build: .
     depends_on:
       - surrealdb
+    volumes:
+      - ./logs:/app/logs
     profiles:
       - main
 
@@ -31,7 +33,5 @@ services:
     entrypoint: /surreal backup http://surrealdb:8000 ./backups/latest.db
     volumes:
       - ./backups:/backups
-    depends_on:
-      - surrealdb
     profiles:
       - backup

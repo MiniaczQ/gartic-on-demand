@@ -1,5 +1,5 @@
 use self::{config::CONFIG, error::AppError};
-use gartic_bot::services::{
+use gartic_on_demand::services::{
     database::{migrations::Migrator, Database},
     provider::Provider,
     status_update::StatusUpdateWaker,

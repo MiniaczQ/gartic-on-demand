@@ -1,7 +1,7 @@
 use crate::app::log::LogConfig;
 use config::{Config, Environment, File, FileFormat};
 use dotenv::dotenv;
-use gartic_bot::services::database::DatabaseConfig;
+use gartic_on_demand::services::database::DatabaseConfig;
 use lazy_static::lazy_static;
 use poise::serenity_prelude::MessageId;
 use serde::{de::DeserializeOwned, Deserialize};

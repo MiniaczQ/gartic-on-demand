@@ -1,6 +1,6 @@
 /target
-.env
+*.env
 surreal
 backups
 logs
-discord-bot.tar
+*.tar

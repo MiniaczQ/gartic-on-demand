@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use async_trait::async_trait;
-use gartic_bot::services::{
+use gartic_on_demand::services::{
     database::{assets::ImageRepository, attempt::Active, round::RoundWithAttempts, ThingToU64},
     gamemodes::{evolution::Evolution, ross::Ross, Mode},
     image_processing::{concat_vertical, normalize_image_aoi, RgbaConvert},

@@ -11,7 +11,7 @@ use app::{
     stats_printer::StatsPrinter,
     AppData,
 };
-use gartic_bot::services::{provider::Provider, status_update::status_update_pair};
+use gartic_on_demand::services::{provider::Provider, status_update::status_update_pair};
 use poise::{serenity_prelude::Ready, Event, Framework, FrameworkContext};
 use serenity::prelude::{Context, GatewayIntents};
 use std::{future::Future, pin::Pin};
@@ -35,6 +35,7 @@ async fn on_error(error: poise::FrameworkError<'_, AppData, AppError>) {
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     app::log::setup();
+
     let options = options();
     let (waker, waiter) = status_update_pair();
     let app_data = AppData::setup(waker).await.unwrap();

@@ -7,7 +7,7 @@ use crate::app::{
     util::respond_with_prompt,
     AppContext, AppError,
 };
-use gartic_bot::services::{
+use gartic_on_demand::services::{
     database::{attempt::AttemptRepository, round::RoundRepository, user::UserRepository},
     gamemodes::GameLogic,
     provider::Provider,

@@ -1,13 +1,13 @@
 use super::{AppData, AppError, AssetHandler};
 use crate::app::{
     config::CONFIG,
-    error::{ConvertError, OptionEmptyError},
+    error::ConvertError,
     permission::has_mod,
     rendering::{ModeRenderer, RoundRenderer},
     util::{fetch_raw_image_from_attachment, raw_image_to_attachment},
 };
 use async_trait::async_trait;
-use gartic_bot::services::{
+use gartic_on_demand::services::{
     database::{attempt::AttemptRepository, user::UserRepository, ThingToU64},
     gamemodes::GameLogic,
     provider::Provider,
@@ -113,10 +113,7 @@ impl AssetHandler for AcceptSubmission {
                     let channel = CONFIG.channels.rejects;
                     let raw_image = fetch_raw_image_from_attachment(old_attachment)
                         .await
-                        .ok_or(AppError::internal(
-                            OptionEmptyError,
-                            "Failed to fetch image",
-                        ))?;
+                        .map_internal("Failed to fetch image")?;
                     let attachment = raw_image_to_attachment(raw_image.into());
                     let content = round.render_partial_text();
                     let new_message = channel

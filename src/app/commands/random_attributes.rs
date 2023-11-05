@@ -6,7 +6,7 @@ use crate::app::{
     util::{fetch_image_from_channel, image_to_attachment},
     AppContext, AppError,
 };
-use gartic_bot::services::{
+use gartic_on_demand::services::{
     database::{byproducts::ByproductsRepository, ThingToU64},
     gamemodes::Mode,
     image_processing::concat_2_2,

@@ -1,1 +1,1 @@
-docker load -i discord-bot.tar
+docker load -i gartic-on-demand.tar

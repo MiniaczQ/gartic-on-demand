@@ -5,7 +5,7 @@ use super::{
     error::{AppError, ConvertError},
 };
 use chrono::{DateTime, Utc};
-use gartic_bot::services::{
+use gartic_on_demand::services::{
     database::{
         attempt::AttemptRepository,
         stats::{ActiveUser, StatsRepository, UnallocatedRound},

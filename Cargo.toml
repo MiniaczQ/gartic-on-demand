@@ -1,5 +1,5 @@
 [package]
-name = "gartic-bot"
+name = "gartic_on_demand"
 version = "0.5.0"
 edition = "2021"
 

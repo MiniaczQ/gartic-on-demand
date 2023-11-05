@@ -5,7 +5,7 @@ use crate::app::{
     util::respond_with_prompt,
     AppContext,
 };
-use gartic_bot::services::{
+use gartic_on_demand::services::{
     database::{
         attempt::{Active, AttemptRepository},
         round::{RoundRepository, RoundWithAttempts},

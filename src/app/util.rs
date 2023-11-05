@@ -6,7 +6,7 @@ use super::{
     AppContext,
 };
 use bytes::Bytes;
-use gartic_bot::services::{
+use gartic_on_demand::services::{
     database::{
         assets::{AssetKind, ImageRepository},
         attempt::{Active, Approved, Attempt},
@@ -23,27 +23,37 @@ use poise::serenity_prelude::{Attachment, AttachmentType, ChannelId, MessageId};
 use reqwest::header::{self, HeaderValue};
 use serenity::http::Http;
 
-pub async fn fetch_raw_image_from_attachment(attachment: &Attachment) -> Option<Bytes> {
-    if attachment.content_type.as_deref() != Some(IMAGE_PNG.essence_str()) {
-        return None;
-    }
-    let response = reqwest::get(&attachment.url).await;
-    let Ok(data) = response else {
-        return None;
-    };
-    if data.headers().get(header::CONTENT_TYPE)
-        != Some(&HeaderValue::from_str(IMAGE_PNG.essence_str()).unwrap())
-    {
-        return None;
-    }
-    let bytes = data.bytes().await.unwrap();
-    Some(bytes)
+#[derive(Debug, thiserror::Error)]
+pub enum FetchError {
+    #[error("Expected discord PNG image, got {0:?}")]
+    DiscordInvalidContentType(Option<String>),
+    #[error("{0}")]
+    Http(#[from] reqwest::Error),
+    #[error("Expected HTTP PNG image, got {0:?}")]
+    HttpInvalidContentType(Option<HeaderValue>),
 }
 
-pub async fn fetch_image_from_attachment(attachment: &Attachment) -> Option<RgbaImage> {
+pub type FetchResult<T> = Result<T, FetchError>;
+
+pub async fn fetch_raw_image_from_attachment(attachment: &Attachment) -> FetchResult<Bytes> {
+    if attachment.content_type.as_deref() != Some(IMAGE_PNG.essence_str()) {
+        Err(FetchError::DiscordInvalidContentType(
+            attachment.content_type.clone(),
+        ))?;
+    }
+    let data = reqwest::get(&attachment.url).await?;
+    let header = data.headers().get(header::CONTENT_TYPE);
+    if header != Some(&HeaderValue::from_str(IMAGE_PNG.essence_str()).unwrap()) {
+        Err(FetchError::HttpInvalidContentType(header.cloned()))?;
+    }
+    let bytes = data.bytes().await.unwrap();
+    Ok(bytes)
+}
+
+pub async fn fetch_image_from_attachment(attachment: &Attachment) -> FetchResult<RgbaImage> {
     let bytes = fetch_raw_image_from_attachment(attachment).await?;
     let image = RgbaImage::from_png(&bytes);
-    Some(image)
+    Ok(image)
 }
 
 pub async fn extract_2x2_image(
@@ -161,7 +171,7 @@ pub async fn fetch_image_from_channel(
     let msg = channel.message(ctx, MessageId(image_id)).await?;
     let image = fetch_image_from_attachment(&msg.attachments[0])
         .await
-        .unwrap();
+        .map_internal("Failed to fetch image")?;
     Ok(image)
 }
 

@@ -2,7 +2,7 @@ use crate::app::{
     config::CONFIG, error::ConvertError, permission::has_admin, response::ResponseContext,
     util::fetch_image_from_attachment, AppContext, AppError,
 };
-use gartic_bot::services::{
+use gartic_on_demand::services::{
     database::assets::{Asset, AssetKind, ImageRepository},
     image_processing::{normalize_image, RgbaConvert},
     provider::Provider,

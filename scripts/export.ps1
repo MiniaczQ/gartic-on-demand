@@ -1,1 +1,1 @@
-docker save miniaczq/discord-bot -o discord-bot.tar
+docker save miniaczq/gartic-on-demand -o gartic-on-demand.tar
