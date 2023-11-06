@@ -1,10 +1,8 @@
-use std::time::Duration;
-
 use super::{
     config::CONFIG,
     error::{AppError, ConvertError},
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use gartic_on_demand::services::{
     database::{
         attempt::AttemptRepository,
@@ -16,8 +14,19 @@ use gartic_on_demand::services::{
     status_update::StatusUpdateWaiter,
 };
 use poise::serenity_prelude::Message;
+use serde::Deserialize;
+use serde_with::{serde_as, DurationSeconds};
 use serenity::prelude::Context;
 use tracing::{error, info};
+
+#[serde_as]
+#[derive(Debug, Deserialize)]
+pub struct StatsPrinterConfig {
+    #[serde_as(as = "DurationSeconds<i64>")]
+    cooldown: Duration,
+    #[serde_as(as = "DurationSeconds<u64>")]
+    min_update_time: std::time::Duration,
+}
 
 pub struct StatsPrinter {
     sr: StatsRepository,
@@ -94,7 +103,7 @@ impl StatsPrinter {
                 })
             })
             .await?;
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(CONFIG.stats_printer.min_update_time).await;
         self.sw.wait().await;
         Ok(())
     }
@@ -156,7 +165,7 @@ impl StatsPrinter {
     }
 
     fn cooldown() -> DateTime<Utc> {
-        Utc::now() + Duration::from_secs(CONFIG.notify.cooldown)
+        Utc::now() + CONFIG.stats_printer.cooldown
     }
 
     async fn update_activity(

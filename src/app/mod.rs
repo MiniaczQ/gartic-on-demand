@@ -10,6 +10,7 @@ use std::error::Error;
 pub mod commands;
 pub mod config;
 pub mod error;
+pub mod expiry_notifier;
 pub mod handlers;
 pub mod log;
 pub mod permission;

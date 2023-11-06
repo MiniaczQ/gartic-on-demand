@@ -7,6 +7,8 @@ use poise::serenity_prelude::MessageId;
 use serde::{de::DeserializeOwned, Deserialize};
 use serenity::model::prelude::{ChannelId, GuildId, RoleId};
 
+use super::{expiry_notifier::ExpiryNotifierConfig, stats_printer::StatsPrinterConfig};
+
 lazy_static! {
     pub static ref CONFIG: AppConfig = init();
 }
@@ -33,7 +35,8 @@ pub struct AppConfig {
     pub image: Image,
     pub log: LogConfig,
     pub database: DatabaseConfig,
-    pub notify: NotifyConfig,
+    pub stats_printer: StatsPrinterConfig,
+    pub expiry_notifier: ExpiryNotifierConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -75,9 +78,4 @@ pub struct Image {
 #[derive(Debug, Deserialize)]
 pub struct Messages {
     pub notify: MessageId,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct NotifyConfig {
-    pub cooldown: u64,
 }

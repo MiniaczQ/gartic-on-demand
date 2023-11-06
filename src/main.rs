@@ -4,6 +4,7 @@ use app::{
     commands,
     config::CONFIG,
     error::AppError,
+    expiry_notifier::ExpiryNotifier,
     handlers::{
         accept_submission::AcceptSubmission, notify_activity::NotifyActivity,
         remove_asset::RemoveAsset, AssetHandler,
@@ -52,9 +53,11 @@ async fn main() {
         .setup(
             move |ctx: &Context, _ready: &Ready, framework: &Framework<AppData, AppError>| {
                 let stats_printer = StatsPrinter::new(app_data.get(), waiter, ctx.clone());
+                let expiry_notifier = ExpiryNotifier::new(app_data.get(), ctx.clone());
                 Box::pin(async move {
                     poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                     spawn(stats_printer.run());
+                    spawn(expiry_notifier.run());
                     Ok(app_data)
                 })
             },

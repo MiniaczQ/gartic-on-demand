@@ -312,11 +312,27 @@ impl AttemptRepository {
             .found()?;
         Ok(attempt)
     }
+
+    pub async fn get_active_between(
+        &self,
+        after: DateTime<Utc>,
+        until: DateTime<Utc>,
+    ) -> DbResult<Vec<Record<Attempt<Active>>>> {
+        let mut result = self
+            .db
+            .query("select * from attempt where state.type = $state_type and state.until > $after and state.until <= $until")
+            .bind(("state_type", "Active"))
+            .bind(("after", after))
+            .bind(("until", until))
+            .await?;
+        let attempts = result.take::<Vec<Record<Attempt<Active>>>>(0)?;
+        Ok(attempts)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use chrono::Duration;
+    use chrono::{Duration, Utc};
 
     use super::AttemptRepository;
     use crate::services::{
@@ -430,5 +446,32 @@ mod tests {
         sut.upload_active_attempt(&user).await.unwrap();
         sut.moderate_uploaded_attempt(&user, 0).await.unwrap();
         sut.reject_pending_attempt(&user, &user, 0).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn few_active_games_between() {
+        let (users, rounds, sut) = setup().await;
+        let user1 = users.create_or_update_user(0, "").await.unwrap();
+        let user2 = users.create_or_update_user(0, "").await.unwrap();
+        rounds
+            .attempt_new_round(&user1, Mode::Ross, false, 1, Duration::seconds(-60 * 60))
+            .await
+            .unwrap();
+        rounds
+            .attempt_new_round(&user1, Mode::Ross, false, 1, Duration::seconds(-60))
+            .await
+            .unwrap();
+        rounds
+            .attempt_new_round(&user2, Mode::Ross, false, 1, Duration::seconds(0))
+            .await
+            .unwrap();
+        let now = Utc::now();
+
+        let attempts = sut
+            .get_active_between(now - Duration::seconds(120), now + Duration::seconds(60))
+            .await
+            .unwrap();
+
+        assert_eq!(attempts.len(), 2);
     }
 }
