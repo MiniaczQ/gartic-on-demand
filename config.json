@@ -33,7 +33,7 @@
         "height": 424
     },
     "log": {
-        "directives": "warn,gartic_on_demand=trace,surrealdb=debug,gartic_on_demand::app::stats_printer=error",
+        "directives": "warn,gartic_on_demand=trace,surrealdb=debug,gartic_on_demand::app::stats_printer=error,gartic_on_demand::app::expiry_notifier=error",
         "console": true,
         "json": "logs"
     },
@@ -45,7 +45,12 @@
             "migrations_dir": "./migrations"
         }
     },
-    "notify": {
-        "cooldown": 3600
+    "stats_printer": {
+        "cooldown": 3600,
+        "min_update_time": 5
+    },
+    "expiry_notifier": {
+        "check_interval": 60,
+        "in_advance": 300
     }
 }
