@@ -15,8 +15,6 @@ flowchart TD;
 
 Player is considered active when:
 - Active
-- Uploading
-- Pending
 
 ## Round allocation
 

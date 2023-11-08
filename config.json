@@ -47,7 +47,8 @@
     },
     "stats_printer": {
         "cooldown": 3600,
-        "min_update_time": 5
+        "min_update_time": 5,
+        "silence_update_time": 60
     },
     "expiry_notifier": {
         "check_interval": 60,

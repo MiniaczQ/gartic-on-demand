@@ -17,6 +17,7 @@ use poise::serenity_prelude::Message;
 use serde::Deserialize;
 use serde_with::{serde_as, DurationSeconds};
 use serenity::prelude::Context;
+use tokio::time::timeout;
 use tracing::{error, info};
 
 #[serde_as]
@@ -26,6 +27,8 @@ pub struct StatsPrinterConfig {
     cooldown: Duration,
     #[serde_as(as = "DurationSeconds<u64>")]
     min_update_time: std::time::Duration,
+    #[serde_as(as = "DurationSeconds<u64>")]
+    silence_update_time: std::time::Duration,
 }
 
 pub struct StatsPrinter {
@@ -104,7 +107,9 @@ impl StatsPrinter {
             })
             .await?;
         tokio::time::sleep(CONFIG.stats_printer.min_update_time).await;
-        self.sw.wait().await;
+        timeout(CONFIG.stats_printer.silence_update_time, self.sw.wait())
+            .await
+            .ok();
         Ok(())
     }
 

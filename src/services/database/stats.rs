@@ -44,10 +44,11 @@ impl StatsRepository {
                     in as user,
                     out as round
                     from attempt
-                    where state.type in $active_state_types
+                    where state.type is $active_state
                     fetch user, round
                 ",
             )
+            .bind(("active_state", "Active"))
             .await?
             .better_check()?;
         let users = result.take::<Vec<ActiveUser>>(0)?;
