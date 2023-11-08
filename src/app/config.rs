@@ -3,7 +3,6 @@ use config::{Config, Environment, File, FileFormat};
 use dotenv::dotenv;
 use gartic_on_demand::services::database::DatabaseConfig;
 use lazy_static::lazy_static;
-use poise::serenity_prelude::MessageId;
 use serde::{de::DeserializeOwned, Deserialize};
 use serenity::model::prelude::{ChannelId, GuildId, RoleId};
 
@@ -31,7 +30,6 @@ pub struct AppConfig {
     pub channels: Channels,
     pub roles: Roles,
     pub reactions: Reactions,
-    pub messages: Messages,
     pub image: Image,
     pub log: LogConfig,
     pub database: DatabaseConfig,
@@ -73,9 +71,4 @@ pub struct Reactions {
 pub struct Image {
     pub width: u32,
     pub height: u32,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Messages {
-    pub notify: MessageId,
 }
