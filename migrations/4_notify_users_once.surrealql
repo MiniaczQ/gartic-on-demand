@@ -1,0 +1,1 @@
+UPDATE user SET notify_once = false;

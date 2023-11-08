@@ -1,9 +1,6 @@
 {
     "discord_token": "",
     "guild": 1158047496023588984,
-    "messages": {
-        "notify": 1167945468760834109
-    },
     "channels": {
         "draw_this": 1161664139945582652,
         "in_contruction": 1161674543446884412,
@@ -20,7 +17,7 @@
         "moderator": 1159068195563507764,
         "trusted": 1163097482910244915,
         "adult": 1163112765486014524,
-        "notify": 1167940311524315147
+        "notify_always": 1167940311524315147
     },
     "reactions": {
         "accept": "✔",
@@ -46,7 +43,7 @@
         }
     },
     "stats_printer": {
-        "cooldown": 3600,
+        "cooldown": 900,
         "min_update_time": 5,
         "silence_update_time": 60
     },

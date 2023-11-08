@@ -3,6 +3,7 @@ pub mod cancel;
 pub mod current;
 pub mod extend;
 pub mod help;
+pub mod notify;
 pub mod purge;
 pub mod random_attributes;
 pub mod reroll;
