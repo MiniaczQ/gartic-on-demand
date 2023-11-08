@@ -23,7 +23,7 @@ impl AssetHandler for NotifyActivity {
                 }
                 let user = add_reaction.user(&ctx).await?;
                 let mut member = CONFIG.guild.member(&ctx, user.id).await?;
-                member.add_role(&ctx, CONFIG.roles.notify).await?;
+                member.add_role(&ctx, CONFIG.roles.notify_always).await?;
                 Ok(())
             }
             Event::ReactionRemove { removed_reaction } => {
@@ -32,7 +32,7 @@ impl AssetHandler for NotifyActivity {
                 }
                 let user = removed_reaction.user(&ctx).await?;
                 let mut member = CONFIG.guild.member(&ctx, user.id).await?;
-                member.remove_role(&ctx, CONFIG.roles.notify).await?;
+                member.remove_role(&ctx, CONFIG.roles.notify_always).await?;
                 Ok(())
             }
             _ => Ok(()),

@@ -12,12 +12,14 @@ struct CreateUser<'a> {
     id: u64,
     name: &'a str,
     created_at: DateTime<Utc>,
+    notify_once: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct User {
     pub name: String,
     pub created_at: DateTime<Utc>,
+    pub notify_once: bool,
 }
 
 pub struct UserRepository {
@@ -35,21 +37,22 @@ where
 
 impl UserRepository {
     pub async fn create_or_update_user(&self, id: u64, name: &str) -> DbResult<Record<User>> {
-        match self.update_user(id, name).await {
+        match self.update_name(id, name).await {
             Err(e) => {
                 warn!(error = ?e);
-                self.create_user(id, name).await
+                self.create(id, name).await
             }
             Ok(user) => Ok(user),
         }
     }
 
-    async fn create_user(&self, id: u64, name: &str) -> DbResult<Record<User>> {
+    async fn create(&self, id: u64, name: &str) -> DbResult<Record<User>> {
         let created_at = Utc::now();
         let user = CreateUser {
             id,
             name,
             created_at,
+            notify_once: false,
         };
         let mut result = self
             .db
@@ -60,11 +63,22 @@ impl UserRepository {
         Ok(user)
     }
 
-    async fn update_user(&self, id: u64, name: &str) -> DbResult<Record<User>> {
+    async fn update_name(&self, id: u64, name: &str) -> DbResult<Record<User>> {
         let mut result = self
             .db
             .query("update user set name = $name where meta::id(id) is $id")
             .bind(("name", name))
+            .bind(("id", id))
+            .await?;
+        let user = result.take::<Option<Record<User>>>(0)?.found()?;
+        Ok(user)
+    }
+
+    pub async fn update_notify_once(&self, id: u64, notify_once: bool) -> DbResult<Record<User>> {
+        let mut result = self
+            .db
+            .query("update user set notify_once = $notify_once where meta::id(id) is $id")
+            .bind(("notify_once", notify_once))
             .bind(("id", id))
             .await?;
         let user = result.take::<Option<Record<User>>>(0)?.found()?;
@@ -79,6 +93,15 @@ impl UserRepository {
             .await?;
         let user = result.take::<Option<Record<User>>>(0)?.found()?;
         Ok(user)
+    }
+
+    pub async fn take_users_to_notify_once(&self) -> DbResult<Vec<Record<User>>> {
+        let mut result = self
+            .db
+            .query("update user set notify_once = false where notify_once is true")
+            .await?;
+        let users = result.take::<Vec<Record<User>>>(0)?;
+        Ok(users)
     }
 }
 
@@ -96,23 +119,23 @@ mod tests {
     async fn fail_second_create() {
         let sut = setup().await;
 
-        sut.create_user(0, "a").await.unwrap();
-        sut.create_user(0, "a").await.unwrap_err();
+        sut.create(0, "a").await.unwrap();
+        sut.create(0, "a").await.unwrap_err();
     }
 
     #[tokio::test]
     async fn fail_update_without_create() {
         let sut = setup().await;
 
-        sut.update_user(0, "a").await.unwrap_err();
+        sut.update_name(0, "a").await.unwrap_err();
     }
 
     #[tokio::test]
     async fn succeed_update_after_create() {
         let sut = setup().await;
 
-        sut.create_user(0, "a").await.unwrap();
-        sut.update_user(0, "a").await.unwrap();
+        sut.create(0, "a").await.unwrap();
+        sut.update_name(0, "a").await.unwrap();
     }
 
     #[tokio::test]
@@ -136,5 +159,32 @@ mod tests {
         let sut = setup().await;
 
         sut.get_user(0).await.unwrap_err();
+    }
+
+    #[tokio::test]
+    async fn update_user_notify_once() {
+        let sut = setup().await;
+        let user = sut.create_or_update_user(0, "a").await.unwrap();
+
+        let r1 = sut.update_notify_once(user.id(), true).await.unwrap();
+        let r2 = sut.update_notify_once(user.id(), false).await.unwrap();
+
+        assert_eq!(r1.notify_once, true);
+        assert_eq!(r2.notify_once, false);
+    }
+
+    #[tokio::test]
+    async fn take_users_with_notify_once() {
+        let sut = setup().await;
+        let u1 = sut.create_or_update_user(0, "a").await.unwrap();
+        sut.create_or_update_user(1, "a").await.unwrap();
+        sut.update_notify_once(u1.id(), true).await.unwrap();
+
+        let r1 = sut.take_users_to_notify_once().await.unwrap();
+        let r2 = sut.take_users_to_notify_once().await.unwrap();
+
+        assert_eq!(r1.len(), 1);
+        assert_eq!(r1[0].id(), 0);
+        assert_eq!(r2.len(), 0);
     }
 }

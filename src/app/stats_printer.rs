@@ -7,7 +7,8 @@ use gartic_on_demand::services::{
     database::{
         attempt::AttemptRepository,
         stats::{ActiveUser, StatsRepository, UnallocatedRound},
-        Database,
+        user::UserRepository,
+        Database, ThingToU64,
     },
     gamemodes::GameLogic,
     provider::Provider,
@@ -34,6 +35,7 @@ pub struct StatsPrinterConfig {
 pub struct StatsPrinter {
     sr: StatsRepository,
     ar: AttemptRepository,
+    ur: UserRepository,
     sw: StatusUpdateWaiter,
     ctx: Context,
 }
@@ -49,6 +51,7 @@ impl StatsPrinter {
         Self {
             sr: db.get(),
             ar: db.get(),
+            ur: db.get(),
             sw,
             ctx,
         }
@@ -181,10 +184,20 @@ impl StatsPrinter {
         match (active, &mut *activity) {
             (true, Activity::None) => {
                 let now = Utc::now();
+                let users = self
+                    .ur
+                    .take_users_to_notify_once()
+                    .await
+                    .map_internal("Failed to fetch users to notify")?;
+                let users_to_notify = users
+                    .into_iter()
+                    .map(|u| format!("<@{}>", u.id.to_u64()))
+                    .collect::<Vec<_>>();
                 let content = format!(
-                    "Activity detected at <t:{}> <@&{}>!",
+                    "Activity detected at <t:{}> <@&{}>, {}!",
                     now.timestamp(),
-                    CONFIG.roles.notify
+                    CONFIG.roles.notify_always,
+                    users_to_notify.join(", ")
                 );
                 let message = CONFIG
                     .channels

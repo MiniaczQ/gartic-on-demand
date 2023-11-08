@@ -102,6 +102,7 @@ fn options() -> poise::FrameworkOptions<AppData, AppError> {
             commands::purge::purge(),
             commands::extend::extend(),
             commands::reroll::reroll(),
+            commands::notify::notify(),
         ],
         on_error: |error| Box::pin(on_error(error)),
         event_handler,
