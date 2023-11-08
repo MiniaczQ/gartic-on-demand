@@ -48,7 +48,7 @@ impl ExpiryNotifier {
     }
 
     async fn loop_body(&mut self, last_check: &mut DateTime<Utc>) -> Result<(), AppError> {
-        info!("Updating stats printer");
+        info!("Checking soon to expire attempts");
         let now = Utc::now();
 
         let after = *last_check - CONFIG.expiry_notifier.in_advance;

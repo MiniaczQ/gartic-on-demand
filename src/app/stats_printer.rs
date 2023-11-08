@@ -25,7 +25,7 @@ use tracing::{error, info};
 #[derive(Debug, Deserialize)]
 pub struct StatsPrinterConfig {
     #[serde_as(as = "DurationSeconds<i64>")]
-    cooldown: Duration,
+    activity_cooldown: Duration,
     #[serde_as(as = "DurationSeconds<u64>")]
     min_update_time: std::time::Duration,
     #[serde_as(as = "DurationSeconds<u64>")]
@@ -40,10 +40,10 @@ pub struct StatsPrinter {
     ctx: Context,
 }
 
+#[derive(Debug)]
 enum Activity {
     Active(Message),
     Cooldown(DateTime<Utc>),
-    None,
 }
 
 impl StatsPrinter {
@@ -173,7 +173,7 @@ impl StatsPrinter {
     }
 
     fn cooldown() -> DateTime<Utc> {
-        Utc::now() + CONFIG.stats_printer.cooldown
+        Utc::now() + CONFIG.stats_printer.activity_cooldown
     }
 
     async fn update_activity(
@@ -182,33 +182,9 @@ impl StatsPrinter {
         activity: &mut Activity,
     ) -> Result<(), AppError> {
         match (active, &mut *activity) {
-            (true, Activity::None) => {
-                let now = Utc::now();
-                let users = self
-                    .ur
-                    .take_users_to_notify_once()
-                    .await
-                    .map_internal("Failed to fetch users to notify")?;
-                let users_to_notify = users
-                    .into_iter()
-                    .map(|u| format!("<@{}>", u.id.to_u64()))
-                    .collect::<Vec<_>>();
-                let content = format!(
-                    "Activity detected at <t:{}> <@&{}>, {}!",
-                    now.timestamp(),
-                    CONFIG.roles.notify_always,
-                    users_to_notify.join(", ")
-                );
-                let message = CONFIG
-                    .channels
-                    .stats
-                    .send_message(&self.ctx, |b| b.content(content))
-                    .await?;
-                *activity = Activity::Active(message);
-            }
             (true, Activity::Cooldown(until)) => {
                 if Utc::now() > *until {
-                    *activity = Activity::None;
+                    self.set_active(activity).await?;
                 } else {
                     *until = Self::cooldown();
                 }
@@ -219,6 +195,33 @@ impl StatsPrinter {
             }
             _ => {}
         };
+        Ok(())
+    }
+
+    async fn set_active(&mut self, activity: &mut Activity) -> Result<(), AppError> {
+        let now = Utc::now();
+        let users = self
+            .ur
+            .take_users_to_notify_once()
+            .await
+            .map_internal("Failed to fetch users to notify")?;
+        let users_to_notify = users.into_iter().map(|u| format!("<@{}>", u.id.to_u64()));
+        let users_to_notify = ["".to_owned()]
+            .into_iter()
+            .chain(users_to_notify)
+            .collect::<Vec<_>>();
+        let content = format!(
+            "Activity detected at <t:{}> <@&{}>{}!",
+            now.timestamp(),
+            CONFIG.roles.notify_always,
+            users_to_notify.join(", ")
+        );
+        let message = CONFIG
+            .channels
+            .stats
+            .send_message(&self.ctx, |b| b.content(content))
+            .await?;
+        *activity = Activity::Active(message);
         Ok(())
     }
 }

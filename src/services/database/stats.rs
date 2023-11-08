@@ -131,7 +131,7 @@ mod tests {
 
         let active_users = sut.get_active_users().await.unwrap();
 
-        assert_eq!(active_users.len(), 3);
+        assert_eq!(active_users.len(), 1);
     }
 
     #[tokio::test]

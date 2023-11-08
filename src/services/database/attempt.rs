@@ -262,21 +262,31 @@ impl AttemptRepository {
         &self,
         user: &Record<User>,
         reviewer: &Record<User>,
-        image_id: u64,
+        prev_image_id: u64,
+        new_image_id: u64,
     ) -> DbResult<RoundWithAttempts<Approved>> {
         let now = Utc::now();
         let state = AttemptState::Approved {
             inner: Approved {
                 when: now,
                 who: reviewer.id.clone(),
-                what: image_id,
+                what: new_image_id,
             },
         };
         let mut result = self
             .db
-            .query("let $attempt = update only attempt set state = $state where in is $user and state.type = $state_type")
+            .query(
+                r"
+                let $attempt = update only attempt
+                    set state = $state
+                    where in is $user
+                    and state.type is $state_type
+                    and state.what is $prev_image_id
+                ",
+            )
             .bind(("state_type", "Pending"))
             .bind(("user", &user.id))
+            .bind(("prev_image_id", prev_image_id))
             .bind(("state", state))
             .query("fn::get_round_with_attempt($attempt)")
             .await?;
@@ -290,21 +300,31 @@ impl AttemptRepository {
         &self,
         user: &Record<User>,
         reviewer: &Record<User>,
-        image_id: u64,
+        prev_image_id: u64,
+        new_image_id: u64,
     ) -> DbResult<Record<Attempt<Rejected>>> {
         let now = Utc::now();
         let state = AttemptState::Rejected {
             inner: Rejected {
                 when: now,
                 who: reviewer.id.clone(),
-                what: image_id,
+                what: new_image_id,
             },
         };
         let mut result = self
             .db
-            .query("update only attempt set state = $state where in is $user and state.type = $state_type")
+            .query(
+                r"
+                update only attempt
+                    set state = $state
+                    where in is $user
+                    and state.type is $state_type
+                    and state.what is $prev_image_id
+                ",
+            )
             .bind(("state_type", "Pending"))
             .bind(("user", &user.id))
+            .bind(("prev_image_id", prev_image_id))
             .bind(("state", state))
             .await?;
         let attempt = result
@@ -424,28 +444,48 @@ mod tests {
     async fn accept_moderated_attempt() {
         let (users, rounds, sut) = setup().await;
         let user = users.create_or_update_user(0, "").await.unwrap();
+
         rounds
             .attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(-60 * 60))
             .await
             .unwrap();
-
         sut.upload_active_attempt(&user).await.unwrap();
         sut.moderate_uploaded_attempt(&user, 0).await.unwrap();
-        sut.approve_pending_attempt(&user, &user, 0).await.unwrap();
+
+        rounds
+            .attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(-60 * 60))
+            .await
+            .unwrap();
+        sut.upload_active_attempt(&user).await.unwrap();
+        sut.moderate_uploaded_attempt(&user, 1).await.unwrap();
+
+        sut.approve_pending_attempt(&user, &user, 1, 2)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
     async fn reject_moderated_attempt() {
         let (users, rounds, sut) = setup().await;
         let user = users.create_or_update_user(0, "").await.unwrap();
+
         rounds
             .attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(-60 * 60))
             .await
             .unwrap();
-
         sut.upload_active_attempt(&user).await.unwrap();
         sut.moderate_uploaded_attempt(&user, 0).await.unwrap();
-        sut.reject_pending_attempt(&user, &user, 0).await.unwrap();
+
+        rounds
+            .attempt_new_round(&user, Mode::Ross, false, 1, Duration::seconds(-60 * 60))
+            .await
+            .unwrap();
+        sut.upload_active_attempt(&user).await.unwrap();
+        sut.moderate_uploaded_attempt(&user, 1).await.unwrap();
+
+        sut.reject_pending_attempt(&user, &user, 1, 2)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

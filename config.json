@@ -43,7 +43,7 @@
         }
     },
     "stats_printer": {
-        "cooldown": 900,
+        "activity_cooldown": 900,
         "min_update_time": 5,
         "silence_update_time": 60
     },

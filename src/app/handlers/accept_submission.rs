@@ -8,7 +8,9 @@ use crate::app::{
 };
 use async_trait::async_trait;
 use gartic_on_demand::services::{
-    database::{attempt::AttemptRepository, user::UserRepository, ThingToU64},
+    database::{
+        attempt::AttemptRepository, round::RoundRepository, user::UserRepository, ThingToU64,
+    },
     gamemodes::GameLogic,
     provider::Provider,
     status_update::StatusUpdateWaker,
@@ -31,6 +33,7 @@ impl AssetHandler for AcceptSubmission {
     ) -> Result<(), AppError> {
         let ar: AttemptRepository = data.get();
         let ur: UserRepository = data.get();
+        let rr: RoundRepository = data.get();
         match event {
             Event::ReactionAdd { add_reaction } => {
                 let user = add_reaction.user(&ctx).await?;
@@ -106,9 +109,18 @@ impl AssetHandler for AcceptSubmission {
                     let new_message = channel
                         .send_message(ctx, |m| m.add_file(attachment).content(content))
                         .await?;
-                    ar.approve_pending_attempt(&user, &reviewer, new_message.id.0)
+                    let round = ar
+                        .approve_pending_attempt(
+                            &user,
+                            &reviewer,
+                            old_message.id.0,
+                            new_message.id.0,
+                        )
                         .await
                         .map_internal("Failed to accept/reject session")?;
+                    rr.forward_complete_round(&round.round, &round.attempt, round.round.forward())
+                        .await
+                        .map_internal("Failed to forward round")?;
                 } else {
                     let channel = CONFIG.channels.rejects;
                     let raw_image = fetch_raw_image_from_attachment(old_attachment)
@@ -119,7 +131,7 @@ impl AssetHandler for AcceptSubmission {
                     let new_message = channel
                         .send_message(ctx, |m| m.add_file(attachment).content(content))
                         .await?;
-                    ar.reject_pending_attempt(&user, &reviewer, new_message.id.0)
+                    ar.reject_pending_attempt(&user, &reviewer, old_message.id.0, new_message.id.0)
                         .await
                         .map_internal("Failed to accept/reject session")?;
                 }
