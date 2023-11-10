@@ -65,7 +65,7 @@ impl ExpiryNotifier {
         for (user, when) in users {
             let dms = user.create_dm_channel(&self.ctx).await?;
             dms.send_message(&self.ctx, |b| {
-                b.content(format!("Your attempt will soon expire: <t:{}:R>", when))
+                b.content(format!("Your attempt will soon expire: <t:{}:R>", when.timestamp()))
             })
             .await?;
         }
