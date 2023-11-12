@@ -29,7 +29,7 @@ impl GameLogic for Ross {
     fn multiplex(&self, round_no: u64) -> u64 {
         match round_no {
             0 => 1,
-            1..=4 => 2,
+            1..=4 => 1,
             _ => 0,
         }
     }
